@@ -48,6 +48,8 @@ BaselineFinder::BaselineFinder():
                     "Maximum number of counts staying flat within a pulse");
   RegisterParameter("min_good_fraction", min_good_fraction = 0.5,
 		    "Minimum fraction of valid samples in a moving window");
+  RegisterParameter("attenuated_ch", attenuated_ch = 1,
+                    "Channel ID with attentuated input, will skip certain baseline regions");
 
 }
 
@@ -182,13 +184,20 @@ int BaselineFinder::DriftingBaseline(ChannelData* chdata)
       mask[samp]=1;//if the previous sample and the next 1 or 2 samples are not baseline
   }
 
-  //warning: this is only to resolve the channel 4 problem for Radon runs July 2015
-  //this is a stupid fix, and should not be used for other data, assuming baseline = 3959
-  //  int baseline_est = 3958.5;//this is for runs before Aug 2015
-  int baseline_est = 3996;//this is for runs before Aug 2015
+  //warning: this is temporary
+  double baseline_est = 3996;//this is for runs before Aug 2015
   int mask_begin = -1, mask_end = -1;
   double total_sum=0, total_n=0;
-  if(chdata->channel_id==5){
+  if(chdata->channel_id==attenuated_ch){
+    //estimate the baseline here
+    for(int i=0; i<pulse_start_index; i++){
+      if(!mask[i]){
+	total_sum+=wave[i]; total_n++; 
+      }
+    }
+    if(total_n>0) baseline_est=total_sum/total_n;
+    else return -1;
+
     mask_begin = chdata->TimeToSample(0.15);
     mask_end = chdata->TimeToSample(0.25);
     double aver = 0;
@@ -206,6 +215,7 @@ int BaselineFinder::DriftingBaseline(ChannelData* chdata)
   //calculate the baseline
   int sum_nsamps=0, sum_samp=0, center_samp=0;
   double sum=0;
+  total_sum=0, total_n=0;
   for(int i=0; i<nsamps; i++){
     baseform[i]=0;
     if(!mask[i]){sum+=wave[i];sum_samp+=i;sum_nsamps++; 

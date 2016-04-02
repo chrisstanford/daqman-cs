@@ -42,10 +42,15 @@ public:
   int pulse_end_inc;          /// Minimum ADC counts decrease over 1-3 samples to end a pulse
   int max_flat_nsamps;        /// maximum sample number to stay "flat" inside a pulse
   double min_good_fraction;   /// Minimum fraction of valid samples in a moving window
+  int attenuated_ch;          /// Channel ID with attentuated input, will skip certain baseline regions
 
 private:
   int FlatBaseline(ChannelData* chdata);
   int DriftingBaseline(ChannelData* chdata);
+
+  //these are temperory values to store the average baseline values for the attenuated channel
+  double average_bl;
+  int average_n;
 
 };
 
