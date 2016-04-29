@@ -48,6 +48,14 @@ V172X_ChannelParams::V172X_ChannelParams() :
   
   RegisterParameter("label",label="x", 
 		    "A descriptive label for the channel");
+  RegisterParameter("calibrate_baseline",calibrate_baseline = false,
+		    "Adjust DC offset values to target baseline");
+  RegisterParameter("target_baseline",target_baseline = 100,
+		    "desired baseline after dc offset adjust");
+  RegisterParameter("allowed_baseline_offset",allowed_baseline_offset = 1,
+		    "max allowable deviation from target baseline");
+  RegisterParameter("final_baseline",final_baseline = -1,
+		    "best baseline value found after calibration");
 }
 
 V172X_BoardParams::V172X_BoardParams() : 
@@ -96,14 +104,18 @@ V172X_BoardParams::V172X_BoardParams() :
 		    "Does this board repeat the trigger-in to trigger-out?");
   RegisterParameter("local_trigger_coincidence",local_trigger_coincidence = 0,
 		    "Number of channels after the first necessary to generate a trigger");
-  RegisterParameter("coincidence_window_nclocks",coincidence_window_nclocks = 0,
-		    "coincidence window in the number of clock cycles");
+  RegisterParameter("coincidence_window_ticks", coincidence_window_ticks=0,
+		    "Width of coinidence window in clockticks (usually 8ns). Note this will delay the trigger time!");
+  RegisterParameter("trigout_coincidence",trigout_coincidence = 0,
+		    "Majority level for trigger out formation");
   RegisterParameter("pre_trigger_time_us", pre_trigger_time_us = 1,
 		    "Length of buffer time to to store before the trigger");
   RegisterParameter("post_trigger_time_us", post_trigger_time_us = 30,
 		    "Length of time after the trigger to store");
   RegisterParameter("downsample_factor", downsample_factor = 1,
 		    "No longer implemented in CAEN firmware; kept for compatibility only!");
+  RegisterParameter("almostfull_reserve",almostfull_reserve = 1,
+		    "Assert BUSY when free buffers <= n");
   RegisterParameter("trigger_polarity", trigger_polarity = TP_FALLING,
 		    "Determines whether to generate trigger when the signal is above or below the trigger threshold");
   RegisterParameter("count_all_triggers", count_all_triggers = true,
@@ -114,6 +126,8 @@ V172X_BoardParams::V172X_BoardParams() :
 		    "Do we generate partial triggers if two come in too close to each other?");
   RegisterParameter("signal_logic", signal_logic = NIM,
 		    "Type of logic (NIM or TTL) for external signals");
+  RegisterParameter("trgout_mode", trgout_mode = TRIGGER,
+		    "Which signal to provide on the front panel TRGOUT");
   RegisterParameter("enable_test_pattern", enable_test_pattern = false,
 		    "Generate a triangle wave on the channels instead of measure real signals?");
   //RegisterParameter("acq_control_val", 
@@ -142,6 +156,16 @@ V172X_Params::V172X_Params() : ParameterList("V172X_Params")
 		    "Do we automatically generate a trigger if timeout occurrs?");
   RegisterParameter("vme_bridge_link", vme_bridge_link = 0,
 		    "VME bridge optical link number");
+  
+  RegisterParameter("basecalib_samples",basecalib_samples = 100,
+		    "samples per trigger for baseline estimation");
+  RegisterParameter("basecalib_triggers",basecalib_triggers = 100,
+		    "events per baseline estimation");
+  RegisterParameter("basecalib_max_tries",basecalib_max_tries = 10,
+		    "Maximum attempta to get baseline before giving up");
+  
+  
+  
   //RegisterParameter("event_size_bytes", event_size_bytes = 0);
   //RegisterParameter("enabled_boards", enabled_boards = 0);
   //RegisterParameter("enabled_channels", enabled_channels = 0);
@@ -192,6 +216,14 @@ int V172X_BoardParams::UpdateBoardSpecificVariables()
     stupid_size_factor = 7;
     ns_per_clocktick = 4;
     break;
+  case V1730:
+    max_sample_rate = 500;
+    sample_bits = 14;
+    bytes_per_sample = 2;
+    v_full_scale = 2;
+    stupid_size_factor = 4;
+    ns_per_clocktick = 8;
+    break;
   default:
     return -1;
     
@@ -201,29 +233,34 @@ int V172X_BoardParams::UpdateBoardSpecificVariables()
 
 //Utility functions
 //returns sample rate in samples per microsecond
-double V172X_BoardParams::GetSampleRate() const
+double V172X_BoardParams::GetSampleRate(bool downsamp) const
 {
   //if(downsample_factor > 10) downsample_factor = 10;
-  return max_sample_rate;
+  return downsamp ? max_sample_rate/downsample_factor : max_sample_rate;
 }
 
-uint32_t V172X_BoardParams::GetPostNSamps() const
+uint32_t V172X_BoardParams::GetPostNSamps(bool downsamp) const
 {
-  return (uint32_t)(post_trigger_time_us * GetSampleRate());
+  return (uint32_t)(post_trigger_time_us * GetSampleRate(downsamp));
 }
 
-uint32_t V172X_BoardParams::GetPreNSamps() const
+uint32_t V172X_BoardParams::GetPreNSamps(bool downsamp) const
 {
-  return (uint32_t)(pre_trigger_time_us * GetSampleRate());
+  return (uint32_t)(pre_trigger_time_us * GetSampleRate(downsamp));
 }
 
-uint32_t V172X_BoardParams::GetTotalNSamps() const
+uint32_t V172X_BoardParams::GetTotalNSamps(bool downsamp) const
 {
   uint32_t total_nsamps = (uint32_t)
-    (( pre_trigger_time_us + post_trigger_time_us ) * GetSampleRate());
+    (( pre_trigger_time_us + post_trigger_time_us ) * GetSampleRate(downsamp));
   while( total_nsamps % (4/bytes_per_sample)) total_nsamps++;
   //if(total_nsamps%2) total_nsamps++;
   return total_nsamps;
+}
+
+uint32_t V172X_BoardParams::GetTotalNBuffers() const
+{
+  return (1<<GetBufferCode());
 }
 
 uint32_t V172X_BoardParams::GetBufferCode() const
@@ -231,7 +268,10 @@ uint32_t V172X_BoardParams::GetBufferCode() const
   int max_samples = mem_size*Mbyte / bytes_per_sample;
   if(board_type == V1751)
     max_samples = (int)(Mbyte * (mem_size == 0x02 ? 1.835 : 14.4 ));
-  uint32_t buffer_code = (uint32_t)floor(log2(max_samples / GetTotalNSamps()));
+  else if(board_type == V1730)
+    max_samples = ( mem_size == 1 ? 640*1024 : (int)(5.12*Mbyte));
+  uint32_t buffer_code = (uint32_t)floor(log2(max_samples / 
+					      GetTotalNSamps(false)));
   if(buffer_code > 0xA)
     buffer_code = 0xA;
   return buffer_code;
@@ -240,8 +280,10 @@ uint32_t V172X_BoardParams::GetBufferCode() const
 uint32_t V172X_BoardParams::GetCustomSizeSetting() const
 {
   if(board_type == V1751)
-    return GetTotalNSamps()/stupid_size_factor;
-  return GetTotalNSamps()*bytes_per_sample/
+    return GetTotalNSamps(false)/stupid_size_factor;
+  else if(board_type == V1730)
+    return GetTotalNSamps(false) / 10;
+  return GetTotalNSamps(false)*bytes_per_sample/
     ( sizeof(uint32_t) * stupid_size_factor);
 }
 
@@ -249,15 +291,15 @@ uint32_t V172X_BoardParams::GetPostTriggerSetting() const
 {
   const int latency = 10;
   if(board_type == V1751)
-    return GetPostNSamps() / 16 - latency;
-  return GetPostNSamps()/(2*stupid_size_factor) - latency;
+    return GetPostNSamps(false) / 16 - latency;
+  return GetPostNSamps(false)/(2*stupid_size_factor) - latency;
   
 }
 
 //return the index corresponding to the sample at the trigger time
-int V172X_BoardParams::GetTriggerIndex() const
+int V172X_BoardParams::GetTriggerIndex(bool downsamp) const
 {
-  return GetPreNSamps();
+  return GetPreNSamps(downsamp);
 }
 
 uint64_t V172X_BoardParams::GetTimestampRange() const
@@ -288,7 +330,7 @@ int V172X_Params::GetEnabledChannels()
 }
 
 //Get the max expected event size in bytes
-int V172X_Params::GetEventSize()
+int V172X_Params::GetEventSize(bool downsamp)
 {
   enabled_boards = 0;
   enabled_channels = 0;
@@ -301,7 +343,7 @@ int V172X_Params::GetEventSize()
     for(int j =0; j<board[i].nchans; j++){
       if(board[i].channel[j].enabled){
 	enabled_channels++;
-	board[i].event_size_bytes += ( board[i].GetTotalNSamps() * 
+	board[i].event_size_bytes += ( board[i].GetTotalNSamps(downsamp) * 
 				       board[i].bytes_per_sample )
 	  + (board[i].zs_type == ZLE ? 8 : 0 );
       }
@@ -424,6 +466,38 @@ std::istream& operator>>(std::istream& in, BOARD_TYPE& type)
     type = OTHER;
     Message e(EXCEPTION);
     e<<temp<<" is not a valid value for BOARD_TYPE"<<std::endl;
+    throw std::invalid_argument(e.str());
+  }
+  return in;
+}
+
+
+std::ostream& operator<<(std::ostream& out, const TRGOUT_MODE& m)
+{
+  std::string word="";
+  switch(m){
+  case TRIGGER:
+    word = "TRIGGER";
+    break;
+  case BUSY:
+    word = "BUSY";
+    break;
+  }
+  //shouldn't get here
+  return out<<word;
+}
+
+std::istream& operator>>(std::istream& in, TRGOUT_MODE& m)
+{
+  std::string tmp;
+  in>>tmp;
+  if(tmp=="TRIGGER")
+    m = TRIGGER;
+  else if(tmp == "BUSY")
+    m = BUSY;
+  else{
+    Message e(EXCEPTION);
+    e<<tmp<<" is not a valid value for TRGOUT_MODE\n";
     throw std::invalid_argument(e.str());
   }
   return in;

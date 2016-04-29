@@ -10,6 +10,8 @@
 #include <stdexcept>
 #include <iomanip>
 
+bool ParameterList::_collapse_disabled = false;
+
 ParameterList::~ParameterList()
 {
 
@@ -52,9 +54,17 @@ void ParameterList::CopyPlistRelative(const ParameterList& right)
   }//end loop over map iterator
 }
 
-
-VParameterNode* const ParameterList::GetParameter(const std::string& key){
+VParameterNode* ParameterList::GetParameter(const std::string& key){
   ParMap::iterator it = _parameters.find(key);
+  if(it != _parameters.end()) 
+    return it->second;
+  else 
+    return 0;
+}
+
+
+const VParameterNode* ParameterList::GetParameter(const std::string& key) const{
+  ParMap::const_iterator it = _parameters.find(key);
   if(it != _parameters.end()) 
     return it->second;
   else 
@@ -207,20 +217,6 @@ std::istream& ParameterList::ReadFrom(std::istream& in, bool single)
 std::ostream& ParameterList::WriteTo( std::ostream& out, bool showhelp,
 				      int indent) const
 {
-  
-  //do not write parameters in disabled plists
-  ParMap::const_iterator mapit = _parameters.find("enabled");
-  if(mapit != _parameters.end() && mapit->second->GetNodeType()==PARAMETER
-     && mapit->second->haswrite){
-    std::ostringstream val;
-    mapit->second->WriteTo(val, false, 0);
-    if(val.str().find("false")!=std::string::npos){
-      out<<"( enabled false )";
-      out.flush();
-      return out;
-    }//end if false
-  }
-
   //if(_parameters.empty())
   //InitializeParameterList();
   std::stringstream dummy;
@@ -229,24 +225,34 @@ std::ostream& ParameterList::WriteTo( std::ostream& out, bool showhelp,
     dummy<<"  ";
   const std::string newline = dummy.str();
 
-  //print an opening parenthesis to mark the beginning
-  out<<"( "<<newline;  
-  //  ParMap::const_iterator mapit;
-  mapit = _parameters.begin();
-  //Loop over all the parameters in the map and pass the stream to them
-  while( !out.fail() && mapit != _parameters.end() ){
-    if(mapit->second->haswrite){
-      int node_type = mapit->second->GetNodeType();
-      if(showhelp) out<<newline<<"# "<<mapit->second->GetHelpText()<<newline;
-      if(node_type == FUNCTION)
-	out<<"#";
-      out<<(mapit->first)<<" ";
-      if(node_type == FUNCTION)
+  const Parameter<bool>* en = 
+    dynamic_cast<const Parameter<bool>* >(GetParameter("enabled"));
+  bool enabled = en ? en->GetValue() : true;
+  
+  if(_collapse_disabled && !enabled){
+    //only mark as disabled
+    out<<"( enabled "<<*en<<" ";
+  }
+  else{
+    //print an opening parenthesis to mark the beginning
+    out<<"( "<<newline;
+    ParMap::const_iterator mapit;
+    mapit = _parameters.begin();
+    //Loop over all the parameters in the map and pass the stream to them
+    while( !out.fail() && mapit != _parameters.end() ){
+      if(mapit->second->haswrite){
+	int node_type = mapit->second->GetNodeType();
+	if(showhelp) out<<newline<<"# "<<mapit->second->GetHelpText()<<newline;
+	if(node_type == FUNCTION)
+	  out<<"#";
+	out<<(mapit->first)<<" ";
+	if(node_type == FUNCTION)
+	  out<<newline;
+	mapit->second->WriteTo(out, showhelp, indent+1);
 	out<<newline;
-      mapit->second->WriteTo(out, showhelp, indent+1);
-      out<<newline;
+      }
+      ++mapit;
     }
-    ++mapit;
   }
   out<<(showhelp ? newline : "")<<")" << (showhelp ? " #end list" : "");
   out.flush();
