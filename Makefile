@@ -55,9 +55,8 @@ LDFLAGS     += -lz $(DEBUGFLAGS)
 BUILDLIBS   := lib/libdaqman.so
 
 #some more optional libraries
-CAENLIBS    := -L/usr/local/lib64 -lCAENVME
-#specific hack to avoid corrupted libs on blackhole
-THREADLIBS  += -L/usr/local/lib -lboost_thread -lboost_date_time
+CAENLIBS    := -lCAENVME
+THREADLIBS  += -lboost_thread-mt -lboost_date_time-mt
 
 #hardcode the path to link against daqman
 LIBS     += -Wl,-rpath,$(PWD)/lib 
