@@ -250,7 +250,7 @@ void ChannelData::Print(int verbosity)
 	m<<"Max Time: "<<max_time<<std::endl;
 	m<<"Min Time: "<<min_time<<std::endl;
 	m<<"SPE Mean: "<<spe_mean<<std::endl;
-	m<<"SPE Sigma: "<<spe_sigma<<std::endl;
+	//	m<<"SPE Sigma: "<<spe_sigma<<std::endl;
 	m<<"Baseline Found: "<<baseline.found_baseline<<std::endl;
 	m<<"Baseline Mean: "<<baseline.mean<<std::endl;
 	m<<"Baseline Standard Deviation: "<<baseline.sigma<<std::endl;

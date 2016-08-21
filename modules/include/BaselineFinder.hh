@@ -1,6 +1,6 @@
 /** @file BaselineFinder.hh
     @brief Defines BaselineFinder module.
-    @author rsaldanha, jingkexu
+    @author jingkexu
     @ingroup modules
 */
 
@@ -10,6 +10,7 @@
 #include "ChannelModule.hh"
 
 #include <vector>
+#include <set>
 /** @class BaselineFinder
     @brief searches the beginning of a channel's waveform to determine baseline
     @ingroup modules
@@ -27,22 +28,25 @@ public:
   static const std::string GetDefaultName(){ return "BaselineFinder";}
 
   //parameters
-  bool flat_baseline;         /// use fixed baseline algorithm
-  double pulse_start_time;    /// time when the pulses are expected to arrive, baseline should end
-  int min_valid_nsamps;       /// minimum valid sample number in the pre trigger window
-  int pulse_edge_add;         /// sample number to be added to the edge of a possible pulse
-  int min_baseline;           /// The minimum ADC sample that can be treated as a valid baseline sample
-  int max_baseline;           /// The maximum ADC sample that can be treated as a valid baseline sample
+  //  bool flat_baseline;         /// use fixed baseline algorithm
+  std::set<int> flat_channels;    /// channels that use fixed baseline algorithm
+  bool relative_spe_threshold;    /// whether the threshold values are relative to channel spe mean
+  bool suppress_zeros;            /// whether we want to suppress zeros in baseline subtracted waveform
+  double pulse_start_time;        /// time when the pulses are expected to arrive, baseline should end
+  int min_valid_nsamps;           /// minimum valid sample number in the pre trigger window
+  int pulse_edge_add;             /// sample number to be added to the edge of a possible pulse
+  int min_baseline;               /// The minimum ADC sample that can be treated as a valid baseline sample
+  int max_baseline;               /// The maximum ADC sample that can be treated as a valid baseline sample
 
-  int baseline_spread;        /// rought estimate of the baseline spread
-  int group_adc_window;       /// number of adc counts to be grouped in flat baseline search
+  double pulse_threshold;         /// absolute pulse threshold value, rough estimate of the baseline spread
+  int group_adc_window;           /// number of adc counts to be grouped in flat baseline search
 
-  int moving_window_nsamps;   /// sample number to be used in the drifting baseline search
-  int pulse_start_inc;        /// Minimum ADC counts increase over 1-3 samples to start a pulse
-  int pulse_end_inc;          /// Minimum ADC counts decrease over 1-3 samples to end a pulse
-  int max_flat_nsamps;        /// maximum sample number to stay "flat" inside a pulse
-  double min_good_fraction;   /// Minimum fraction of valid samples in a moving window
-  int attenuated_ch;          /// Channel ID with attentuated input, will skip certain baseline regions
+  int moving_window_nsamps;       /// sample number to be used in the drifting baseline search
+  double pulse_start_threshold;   /// Minimum ADC counts change over 1-3 samples to start a pulse
+  double pulse_end_threshold;     /// Minimum ADC counts change over 1-3 samples to end a pulse
+  int max_flat_nsamps;            /// maximum sample number to stay "flat" inside a pulse
+  double min_good_fraction;       /// Minimum fraction of valid samples in a moving window
+  int attenuated_ch;              /// Channel ID with attentuated input, will skip certain baseline regions
 
 private:
   int FlatBaseline(ChannelData* chdata);

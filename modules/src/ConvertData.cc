@@ -14,6 +14,8 @@ ConvertData::ConvertData():
 {
   RegisterParameter("offset_channels", _offsets, 
 		    "map of channelid:offset time to apply for analysis");
+  RegisterParameter("spe_means", _spe_means, 
+		    "map of channelid:spe mean value for analysis");
   _v172X_params = 0;
   _headers_only = false;
 }
@@ -120,13 +122,16 @@ int ConvertData::Process(EventPtr event)
 	chdata.minimum = *min_samp;
 	chdata.max_time = chdata.SampleToTime(max_samp - wave);
 	chdata.min_time = chdata.SampleToTime(min_samp - wave);
+
 	//find the single photoelectron peak for this channel
-	
-	int chinfo=0;
-	//const RunDB::runinfo::channelinfo* chinfo = 
-	//_info->GetChannelInfo(chdata.channel_id);
-	if(chinfo)
-	  chdata.spe_mean = 1;//chinfo->spe_mean;
+	std::map<int, double>::iterator it = _spe_means.find(chdata.channel_id);
+	if (it != _spe_means.end() && it->second>0)
+	  chdata.spe_mean = it->second;
+// 	int chinfo=0;
+// 	//const RunDB::runinfo::channelinfo* chinfo = 
+// 	//_info->GetChannelInfo(chdata.channel_id);
+// 	if(chinfo)
+// 	  chdata.spe_mean = 1;//chinfo->spe_mean;
 	else
 	  {
 	    chdata.spe_mean = 1;
@@ -339,4 +344,3 @@ int ConvertData::DecodeV172XData(const unsigned char* rawdata,
   
   return 0;
 }
-

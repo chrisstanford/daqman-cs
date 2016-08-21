@@ -89,7 +89,7 @@ public:
   const char* channel_start; //!< pointer to start of waveform
   const char* channel_end;   //!< pointer to end of waveform
   double spe_mean;     ///< mean photoelectron response read from database
-  double spe_sigma;
+  //  double spe_sigma;
   //vector waveforms
   std::vector<double> waveform; //!< Raw waveform as a double array
   std::vector<std::pair<int,int> > unsuppressed_regions; //!< list of begin,end sample of non-zero-suppressed regions in the waveform
@@ -136,7 +136,7 @@ inline void ChannelData::Clear()
   channel_start = NULL;
   channel_end = NULL;
   spe_mean = 1.;
-  spe_sigma = 0.;
+  //  spe_sigma = 0.;
   baseline.Clear();
   subtracted_waveform.clear();
   npulses=0;
