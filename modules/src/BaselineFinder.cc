@@ -25,27 +25,29 @@ BaselineFinder::BaselineFinder():
   AddDependency<ConvertData>();
   
   //Register all the config handler parameters
-  RegisterParameter("flat_channels",  flat_channels, "channels that use fixed baseline algorithm");
-  RegisterParameter("relative_spe_threshold", relative_spe_threshold = false,
-		    "whether the threshold values are relative to channel spe mean");
-  RegisterParameter("suppress_zeros", suppress_zeros = false,
-		    "whether we want to suppress zeros in baseline subtracted waveform");
   //   RegisterParameter("flat_baseline", flat_baseline = false,
   // 		    "Search for a flat baseline in pre-trigger window, otherwise search for a drifting baseline");
-  RegisterParameter("pulse_start_time", pulse_start_time = -0.1,
-                    "Time when the pulses are expected to arrive, baseline should end ");
+  RegisterParameter("baseline_end_time", baseline_end_time = -0.1,
+                    "Time when the pulses are expected to arrive, baseline should end");
+  RegisterParameter("min_baseline_adc", min_baseline_adc = 3000,
+                    "The minimum ADC sample that can be treated as a valid baseline sample");
+  RegisterParameter("max_baseline_adc", max_baseline_adc = 4095,
+                    "The maximum ADC sample that can be treated as a valid baseline sample");
   RegisterParameter("min_valid_nsamps", min_valid_nsamps = 10,
                     "Minimum samples for a baseline to be valid");
+  RegisterParameter("relative_spe_threshold", relative_spe_threshold = false,
+		    "whether the threshold values are relative to channel spe mean");
   RegisterParameter("pulse_edge_add", pulse_edge_add  = 2,
                     "Number of samples to be added at the edge of possible pulses");
-  RegisterParameter("min_baseline", min_baseline = 3000,
-                    "The minimum ADC sample that can be treated as a valid baseline sample");
-  RegisterParameter("max_baseline", max_baseline = 4095,
-                    "The maximum ADC sample that can be treated as a valid baseline sample");
+  RegisterParameter("suppress_zeros", suppress_zeros = false,
+		    "whether we want to suppress zeros in baseline subtracted waveform");
+  RegisterParameter("suppress_nsigmas", suppress_nsigmas = 3,
+		    "how many baseline sigmas do we want to suppress");
   // RegisterParameter("",  = 10,
   //                   "");
 
   //parameters for fixed baseline
+  RegisterParameter("flat_channels",  flat_channels, "channels that use fixed baseline algorithm");
   RegisterParameter("pulse_threshold",  pulse_threshold = 3,
                     "absolute pulse threshold value, rough estimate of the baseline spread");
   RegisterParameter("group_adc_window", group_adc_window = 3,
@@ -62,9 +64,6 @@ BaselineFinder::BaselineFinder():
                     "Maximum number of counts staying flat within a pulse");
   RegisterParameter("min_good_fraction", min_good_fraction = 0.5,
 		    "Minimum fraction of valid samples in a moving window");
-  RegisterParameter("attenuated_ch", attenuated_ch = 1,
-                    "Channel ID with attentuated input, will skip certain baseline regions");
-
 }
 
 BaselineFinder::~BaselineFinder()
@@ -77,7 +76,8 @@ int BaselineFinder::Initialize()
   //we need to let the program fail if the user set unphysical parameters
   if(min_valid_nsamps<1 ||pulse_edge_add<1 || moving_window_nsamps<1 || 
      group_adc_window<1 || max_flat_nsamps<1 || min_good_fraction<=0 ||
-     pulse_start_threshold==0 || pulse_end_threshold==0 || min_baseline>=max_baseline) 
+     pulse_start_threshold==0 || pulse_end_threshold==0 || 
+     min_baseline_adc>=max_baseline_adc || suppress_nsigmas<=0) 
     return -1;
   //we only use the absolute value of pulse_threshold for flat baseline search
   //so we allow users to use negative values if the want
@@ -97,6 +97,38 @@ int BaselineFinder::Process(ChannelData* chdata)
     run_result = DriftingBaseline(chdata);
   //we try the flat baseline if the drift baseline fails
   if(run_result) run_result = FlatBaseline(chdata);
+
+  //if we want to suppress zeros, we need to find the pulses and the edges
+  if(suppress_zeros && !(run_result) && chdata->baseline.sigma>0){
+    const int nsamps = chdata->nsamps;
+    double threshold_adc = chdata->baseline.sigma*suppress_nsigmas;
+    std::vector<double>& baseform = chdata->subtracted_waveform;
+    //mark the pulses
+    std::vector<int> mask(nsamps, 0);
+    for(int samp=0; samp<nsamps; samp++){
+      if(std::fabs(baseform[samp])>threshold_adc)
+	mask[samp]=1;//1 means might be in pulse
+      else mask[samp]=0;//0 means baseline
+    }
+    //mark the edge of the pulses
+    int edge = 0;
+    for(int samp=0; samp<nsamps; samp++){
+      if(mask[samp]) edge=pulse_edge_add+1;
+      else if(edge){mask[samp]=1; edge--;}
+    }
+    edge = 0;
+    for(int samp=nsamps-1; samp>=0; samp--){
+      if(mask[samp]) edge=pulse_edge_add;
+      else if(edge) {mask[samp]=1; edge--;}
+    }
+
+    //set baseline values to be absolute 0
+    for(int samp=0; samp<nsamps; samp++){
+      if(!(mask[samp])) baseform[samp] = 0;
+    }//end for loop
+
+  }//end if suppress zeros
+
   //we don't want to be overwhelmed by error messages due to baseline fail
   //dependent modules need to check whether baseline finder succeed or not
   return 0;
@@ -111,7 +143,7 @@ int BaselineFinder::DriftingBaseline(ChannelData* chdata)
   if(nsamps<1) return -1;
 
   //find the maximum sample value within the pre_trigger area
-  int pulse_start_index = chdata->TimeToSample(pulse_start_time) - 1;
+  int pulse_start_index = chdata->TimeToSample(baseline_end_time) - 1;
   if(pulse_start_index<1) return -1;
   double max_pre_trig = *std::max_element(wave,wave+pulse_start_index);
   double min_pre_trig = *std::min_element(wave,wave+pulse_start_index);
@@ -138,9 +170,9 @@ int BaselineFinder::DriftingBaseline(ChannelData* chdata)
     end_threshold_adc = pulse_end_threshold;
   }
 
-  //pulse start=1, end=-1, saturation=-2, middle of pulse=2
+  //pulse start=1, end=-1, saturation=-2, middle of pulse=2, baseline=0
   for(int i=0; i<nsamps; i++){
-    if(wave[i]>max_baseline || wave[i]<min_baseline || //PMT/electronics saturation
+    if(wave[i]>max_baseline_adc || wave[i]<min_baseline_adc || //PMT/electronics saturation
        std::fabs(chdata->GetVerticalRange()-wave[i])<1 || wave[i]<1) //ADC saturation
       mask[i] = -2; 
     if(i<1) continue;
@@ -221,43 +253,12 @@ int BaselineFinder::DriftingBaseline(ChannelData* chdata)
       mask[samp]=1;//if the previous sample and the next 1 or 2 samples are not baseline
   }
 
-  //warning: this is temporary
-  double baseline_est = 3996;//this is for runs before Aug 2015
-  int mask_begin = -1, mask_end = -1;
-  double total_sum=0, total_n=0;
-  if(chdata->channel_id==attenuated_ch){
-    //estimate the baseline here
-    for(int i=0; i<pulse_start_index; i++){
-      if(!mask[i]){
-	total_sum+=wave[i]; total_n++; 
-      }
-    }
-    if(total_n>0) baseline_est=total_sum/total_n;
-    else return -1;
-
-    mask_begin = chdata->TimeToSample(0.15);
-    mask_end = chdata->TimeToSample(0.25);
-    double aver = 0;
-    for(int samp=mask_begin; samp<mask_end; samp++) aver += wave[samp];
-    if(mask_end>mask_begin){
-      aver /= mask_end-mask_begin;
-      //      std::cout<<"The average at ~0.2us is: "<<aver<<std::endl;
-    }
-    mask_begin = chdata->TimeToSample(-0.1);
-    if(aver<baseline_est-2.) mask_end = chdata->TimeToSample(5.+0.035*(baseline_est-aver));
-    for(int samp=mask_begin; samp<mask_end; samp++)
-      mask[samp]=1;
-  }
-
   //calculate the baseline
   int sum_nsamps=0, sum_samp=0, center_samp=0;
   double sum=0;
-  total_sum=0, total_n=0;
   for(int i=0; i<nsamps; i++){
     baseform[i]=0;
-    if(!mask[i]){sum+=wave[i];sum_samp+=i;sum_nsamps++; 
-      if(mask_end>pulse_start_index && i<mask_end+pulse_start_index){ total_sum+=wave[i]; total_n++;}
-    }
+    if(!mask[i]){sum+=wave[i];sum_samp+=i;sum_nsamps++;}
     if(i<moving_window_nsamps-1) continue;
     if(sum_nsamps>=moving_window_nsamps*min_good_fraction){
       center_samp = sum_samp/sum_nsamps;
@@ -268,13 +269,6 @@ int BaselineFinder::DriftingBaseline(ChannelData* chdata)
     if(!mask[i-moving_window_nsamps+1])
       {sum-=wave[i-moving_window_nsamps+1]; sum_samp-=i-moving_window_nsamps+1;sum_nsamps--;}
   }//end for i
-
-  //warning: this is only to resolve the channel 4 problem for Radon runs July 2015
-  //this is a stupid fix, and should not be used for other data
-  if(mask_begin>0 && mask_end>mask_begin && total_n>0){
-    total_sum /= total_n;
-    for(int samp=mask_begin; samp<mask_end; samp++) baseform[samp] = total_sum;
-  }
 
   {  //smooth the baseline twice
     std::vector<double> smooth_bl (nsamps, 0);
@@ -342,7 +336,6 @@ int BaselineFinder::DriftingBaseline(ChannelData* chdata)
   //subtract off the baseline
   for(int i=0; i<nsamps; i++){
     baseform[i] = wave[i]-baseform[i];
-    if(suppress_zeros && !mask[i]) baseform[i] = 0;
   }
   return 0;
 
@@ -357,7 +350,7 @@ int BaselineFinder::FlatBaseline(ChannelData* chdata){
   if(nsamps<1) return -1;
 
   //find the maximum sample value within the pre_trigger area
-  int pulse_start_index = chdata->TimeToSample(pulse_start_time) - 1;
+  int pulse_start_index = chdata->TimeToSample(baseline_end_time) - 1;
   if(pulse_start_index<1 || pulse_start_index>=nsamps-1) return -1;
   double max_pre_trig = *std::max_element(wave,wave+pulse_start_index);
   double min_pre_trig = *std::min_element(wave,wave+pulse_start_index);
@@ -370,8 +363,8 @@ int BaselineFinder::FlatBaseline(ChannelData* chdata){
 
   int max_bl = int(max_pre_trig);
   int min_bl = int(min_pre_trig);
-  if(max_bl>max_baseline) max_bl = max_baseline;
-  if(min_bl<min_baseline) min_bl = min_baseline;
+  if(max_bl>max_baseline_adc) max_bl = max_baseline_adc;
+  if(min_bl<min_baseline_adc) min_bl = min_baseline_adc;
   if(min_bl<1) min_bl=1;//can not be 0 to avoid saturation pulses
   if(max_bl-min_bl<1) return -1;
   std::vector<int> stats (max_bl-min_bl+1, 0);
@@ -457,32 +450,9 @@ int BaselineFinder::FlatBaseline(ChannelData* chdata){
   }//if abs
   else return -1;
 
-  //if we want to suppress zeros, we need to find the pulses and the edges
-  if(suppress_zeros){
-    //mark the pulses
-    stats.resize(nsamps);
-    for(int samp=0; samp<nsamps; samp++){
-      if(std::abs(wave[samp]-baseline.mean)>threshold_adc)
-	stats[samp]=1;//1 means might be in pulse
-      else stats[samp]=0;//0 means baseline
-    }
-    //mark the edge of the pulses
-    int edge = 0;
-    for(int samp=0; samp<nsamps; samp++){
-      if(stats[samp]) edge=pulse_edge_add+1;
-      else if(edge){stats[samp]=1; edge--;}
-    }
-    edge = 0;
-    for(int samp=nsamps-1; samp>=0; samp--){
-      if(stats[samp]) edge=pulse_edge_add;
-      else if(edge) {stats[samp]=1; edge--;}
-    }
-  }//end if suppress zeros
-
   //subtract off the baseline
   for(int samp=0; samp<nsamps; samp++){
     baseform[samp] = wave[samp]-baseline.mean;
-    if(suppress_zeros && !stats[samp]) baseform[samp] = 0;
   }
 
   return 0;

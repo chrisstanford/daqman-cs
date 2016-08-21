@@ -29,15 +29,16 @@ public:
 
   //parameters
   //  bool flat_baseline;         /// use fixed baseline algorithm
-  std::set<int> flat_channels;    /// channels that use fixed baseline algorithm
-  bool relative_spe_threshold;    /// whether the threshold values are relative to channel spe mean
-  bool suppress_zeros;            /// whether we want to suppress zeros in baseline subtracted waveform
-  double pulse_start_time;        /// time when the pulses are expected to arrive, baseline should end
+  double baseline_end_time;       /// time when the pulses are expected to arrive, baseline should end
+  int min_baseline_adc;           /// The minimum ADC sample that can be treated as a valid baseline sample
+  int max_baseline_adc;           /// The maximum ADC sample that can be treated as a valid baseline sample
   int min_valid_nsamps;           /// minimum valid sample number in the pre trigger window
+  bool relative_spe_threshold;    /// whether the threshold values are relative to channel spe mean
   int pulse_edge_add;             /// sample number to be added to the edge of a possible pulse
-  int min_baseline;               /// The minimum ADC sample that can be treated as a valid baseline sample
-  int max_baseline;               /// The maximum ADC sample that can be treated as a valid baseline sample
+  bool suppress_zeros;            /// whether we want to suppress zeros in baseline subtracted waveform
+  double suppress_nsigmas;        /// how many baseline sigmas do we want to suppress
 
+  std::set<int> flat_channels;    /// channels that use fixed baseline algorithm
   double pulse_threshold;         /// absolute pulse threshold value, rough estimate of the baseline spread
   int group_adc_window;           /// number of adc counts to be grouped in flat baseline search
 
@@ -46,15 +47,10 @@ public:
   double pulse_end_threshold;     /// Minimum ADC counts change over 1-3 samples to end a pulse
   int max_flat_nsamps;            /// maximum sample number to stay "flat" inside a pulse
   double min_good_fraction;       /// Minimum fraction of valid samples in a moving window
-  int attenuated_ch;              /// Channel ID with attentuated input, will skip certain baseline regions
 
 private:
   int FlatBaseline(ChannelData* chdata);
   int DriftingBaseline(ChannelData* chdata);
-
-  //these are temperory values to store the average baseline values for the attenuated channel
-  double average_bl;
-  int average_n;
 
 };
 
