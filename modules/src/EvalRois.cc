@@ -7,7 +7,6 @@
 #include "ChannelData.hh"
 #include "Integrator.hh"
 #include "Pulse.hh"
-#include "EvalPulse.hh"
 #include "EventHandler.hh"
 #include <algorithm>
 #include <numeric>

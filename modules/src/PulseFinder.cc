@@ -1,5 +1,4 @@
 #include "PulseFinder.hh"
-#include "EvalPulse.hh"
 #include "BaselineFinder.hh"
 //#include "SumChannels.hh"
 #include "Integrator.hh"
@@ -291,6 +290,8 @@ void PulseFinder::DiscriminatorSearch( ChannelData* chdata,
 				       std::vector<int>& start_index,
 				       std::vector<int>& end_index){
   
+  std::vector<int> start_index_tmp;
+  std::vector<int> end_index_tmp;
   double check_val = discriminator_value;
   if(use_baseline_sigma){
     check_val = -1.*std::abs(discriminator_nsigma)*chdata->baseline.sigma;
@@ -302,67 +303,90 @@ void PulseFinder::DiscriminatorSearch( ChannelData* chdata,
     wave = chdata->GetWaveform();
   }
   
+  if(start_index.size()) start_index.clear();
+  if(end_index.size()) end_index.clear();
   bool in_pulse = false;
   int search_start_index = chdata->TimeToSample(search_start_time, true);
   int search_end_index = chdata->TimeToSample(search_end_time, true);
+
   for(int index = search_start_index+discriminator_start_add; 
       index<search_end_index-discriminator_end_add; index++){
     if(wave[index]<=check_val){
       if(wave[index-1]>check_val){//if just come to a pulse
         in_pulse = true;
-        start_index.push_back(index-discriminator_start_add );
+        start_index_tmp.push_back(index-discriminator_start_add );
       }
       if(wave[index+1]>check_val){//if just leave a pulse
-        if(in_pulse) end_index.push_back(index+discriminator_end_add );
+        if(in_pulse) end_index_tmp.push_back(index+discriminator_end_add );
         in_pulse = false;
       }//end if wave index+1
     }//end if wave index <=
   }//end for int index
-  if(in_pulse) end_index.push_back(search_end_index);
+  if(in_pulse) end_index_tmp.push_back(search_end_index);
 
-  // if(start_index.size()!=end_index.size()){
-  //   std::cerr<<start_index.size()<<" =/= "<<end_index.size()<<std::endl;
+  // if(start_index_tmp.size()!=end_index_tmp.size()){
+  //   std::cerr<<start_index_tmp.size()<<" =/= "<<end_index_tmp.size()<<std::endl;
   //   std::cerr<<"PulseFinder failed to find correct pulses, give up this event."<<std::endl;
-  // start_index.clear();
-  // end_index.clear();
+  // start_index_tmp.clear();
+  // end_index_tmp.clear();
   //    return;
   //  }
 
   //resoving overlapping pulses
-  for(size_t index=1; index<start_index.size(); index++){
-    // std::cout<<chdata->channel_id<<'\t'<<index<<'\t'<<chdata->SampleToTime(start_index.at(index))
-    // 	     <<'\t'<<chdata->SampleToTime(end_index.at(index))<<std::endl;
-    if(start_index.at(index)<=end_index.at(index-1)){
-      int middle_index = (start_index.at(index)+end_index.at(index-1))/2;
+  for(size_t index=1; index<start_index_tmp.size(); index++){
+    // std::cout<<chdata->channel_id<<'\t'<<index<<'\t'<<chdata->SampleToTime(start_index_tmp.at(index))
+    // 	     <<'\t'<<chdata->SampleToTime(end_index_tmp.at(index))<<std::endl;
+    if(start_index_tmp.at(index)<=end_index_tmp.at(index-1)){
+      int middle_index = (start_index_tmp.at(index)+end_index_tmp.at(index-1))/2;
       double max_value = wave[middle_index];
-      //      for(int j=start_index.at(index); j<=end_index.at(index-1); j++){
-      for(int j=end_index.at(index-1)-discriminator_end_add+1; j<start_index.at(index)+discriminator_start_add; j++){
+      for(int j=end_index_tmp.at(index-1)-discriminator_end_add+1; j<start_index_tmp.at(index)+discriminator_start_add; j++){
+	if(j<search_start_index) continue;
+	else if(j>=search_end_index) break;
         if(wave[j]<=max_value) continue;
         max_value = wave[j];
         middle_index = j;
       }//end for j loop
-      start_index.at(index) = middle_index;
-      end_index.at(index-1) = middle_index;
+      start_index_tmp.at(index) = middle_index;
+      end_index_tmp.at(index-1) = middle_index;
     }//end if statement
   }//end for index loop
 
-  // for(size_t index=0; index<start_index.size(); index++)
-  //   std::cout<<chdata->channel_id<<'\t'<<index<<'\t'<<chdata->SampleToTime(start_index.at(index))
-  //    	     <<'\t'<<chdata->SampleToTime(end_index.at(index))<<std::endl;
+  //  for(size_t index=0; index<start_index_tmp.size(); index++)
+  //    std::cout<<chdata->channel_id<<'\t'<<index<<'\t'<<chdata->SampleToTime(start_index_tmp.at(index))
+  //      	     <<'\t'<<chdata->SampleToTime(end_index_tmp.at(index))<<std::endl;
   
   //get rid of really small/fake pulses
-  // for(int index=0; index<start_index.size()+0.; index++){
-  //   if(end_index.at(index)-start_index.at(index)>discriminator_start_add+discriminator_end_add)
+  // for(int index=0; index<start_index_tmp.size()+0.; index++){
+  //   if(end_index_tmp.at(index)-start_index_tmp.at(index)>discriminator_start_add+discriminator_end_add)
   //     continue;
-  //   if(index>0 && end_index.at(index-1)>=start_index.at(index)-discriminator_end_add) 
-  //     end_index.at(index-1) = end_index.at(index);
-  //   else if(index<start_index.size()-1. && start_index.at(index+1)<=end_index.at(index)+discriminator_start_add) 
-  //     start_index.at(index+1) = start_index.at(index);
-  //   start_index.erase(start_index.begin()+index);
-  //   end_index.erase(end_index.begin()+index);
+  //   if(index>0 && end_index_tmp.at(index-1)>=start_index_tmp.at(index)-discriminator_end_add) 
+  //     end_index_tmp.at(index-1) = end_index_tmp.at(index);
+  //   else if(index<start_index_tmp.size()-1. && start_index_tmp.at(index+1)<=end_index_tmp.at(index)+discriminator_start_add) 
+  //     start_index_tmp.at(index+1) = start_index_tmp.at(index);
+  //   start_index_tmp.erase(start_index_tmp.begin()+index);
+  //   end_index_tmp.erase(end_index_tmp.begin()+index);
   //   index --;
   // }
+
+  std::vector<double>& baseform = chdata->subtracted_waveform;
   
+  for(size_t index=1; index<start_index_tmp.size(); index++){
+    std::cout<<chdata->channel_id<<'\t'<<index<<'\t'<<chdata->SampleToTime(start_index_tmp.at(index))
+      	     <<'\t'<<chdata->SampleToTime(end_index_tmp.at(index))<<std::endl;
+    if(start_index_tmp.at(index)>=end_index_tmp.at(index)) continue;
+    std::vector<int> start_index_tmp2;
+    std::vector<int> end_index_tmp2;
+    int test_result= RelativeThresholdSearch(baseform, -1.*std::fabs(discriminator_nsigma)*chdata->baseline.sigma,
+					     std::fabs(discriminator_nsigma)*chdata->baseline.sigma,
+					     start_index_tmp2, end_index_tmp2, discriminator_end_add, 1,
+					     start_index_tmp.at(index),end_index_tmp.at(index));
+    if(!test_result){
+      std::cout<<"*** Great *** RelativeThresholdSearch succeeded! "<<std::endl;
+      start_index.insert(start_index.end(), start_index_tmp2.begin(), start_index_tmp2.end());
+      end_index.insert(end_index.end(), end_index_tmp2.begin(), end_index_tmp2.end());
+    }
+
+    }  
   return;
 }
 

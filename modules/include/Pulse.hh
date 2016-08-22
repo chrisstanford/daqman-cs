@@ -9,6 +9,7 @@
 #define PULSE_h
 
 #include "Message.hh"
+#include "PulseUtility.hh"
 #include "Peak.hh"
 #include <vector>
 #include <iostream>

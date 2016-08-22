@@ -1,6 +1,5 @@
 #include "TOF.hh"
 #include "BaselineFinder.hh"
-#include "EvalPulse.hh"
 #include "PulseFinder.hh"
 #include "EventHandler.hh"
 #include "Integrator.hh"
