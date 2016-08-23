@@ -59,7 +59,17 @@ int ConvertData::Initialize()
   }
   
   _info = EventHandler::GetInstance()->GetRunInfo();
-  
+
+  //we want spe_mean values to be always positive to avoid confusion
+  for(std::map<int, double>::iterator it = _spe_means.begin();
+      it != _spe_means.end(); it++){
+    if(it->second<0) it->second *= -1;
+    else if(it->second==0){
+      Message(ERROR)<<"Channel "<<it->first<< " has spe_mean value set to be 0!\n";
+      return 1;
+    }
+  }
+
   return 0;
 }
 
@@ -124,9 +134,9 @@ int ConvertData::Process(EventPtr event)
 	chdata.min_time = chdata.SampleToTime(min_samp - wave);
 
 	//find the single photoelectron peak for this channel
-	std::map<int, double>::iterator it = _spe_means.find(chdata.channel_id);
-	if (it != _spe_means.end() && it->second>0)
-	  chdata.spe_mean = it->second;
+ 	std::map<int, double>::iterator it = _spe_means.find(chdata.channel_id);
+ 	if (it != _spe_means.end() && it->second>0)
+ 	  chdata.spe_mean = it->second;
 // 	int chinfo=0;
 // 	//const RunDB::runinfo::channelinfo* chinfo = 
 // 	//_info->GetChannelInfo(chdata.channel_id);

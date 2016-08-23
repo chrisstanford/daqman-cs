@@ -66,7 +66,7 @@ public:
 
 public:
   /// Define some 'fake' channel types
-  enum ID_TYPES { CH_INVALID=-1, CH_SUM=-2 };
+  enum ID_TYPES { CH_INVALID=-1, CH_SUM=-2, CH_DEFAULT=-3 };
 public:
   //data members
   //raw-ish information

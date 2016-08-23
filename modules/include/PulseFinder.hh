@@ -1,6 +1,6 @@
 /** @file PulseFinder.hh
     @brief Defines the PulseFinder module
-    @author rsaldanha, bloer
+    @author jingke
     @ingroup modules
 */
 #ifndef PULSEFINDER_h
@@ -10,7 +10,7 @@
 #include <vector>
 
 /** @class PulseFinder
-    @brief Searches for individual scintillation events within a trigger
+    @brief Searches for pulses defined by the users
     @ingroup modules
 */
 class PulseFinder : public BaseModule{
@@ -21,75 +21,49 @@ public:
   int Initialize();
   int Finalize();
   int Process(EventPtr evt);
-  
-  /// Search for pulses using a simple discrimination threshold
-  void DiscriminatorSearch(ChannelData* chdata,
-			   std::vector<int>& start_index, 
-			   std::vector<int>& end_index);
-  
-  /// Search for pulses based on the measured variance of the baseline
-  void VarianceSearch(ChannelData* chdata,
-		      std::vector<int>& start_index, 
-		      std::vector<int>& end_index);
-  
-  void IntegralSearch(ChannelData* chdata,
-		      std::vector<int>& start_index,
-		      std::vector<int>& end_index);
-  
-  /// Search for pulses based on the curvature of the integral
-  void CurvatureSearch(ChannelData* chdata,
-		       std::vector<int>& start_index,
-		       std::vector<int>& end_index);
-  
   static const std::string GetDefaultName(){ return "PulseFinder"; }
   
-  enum SEARCH_MODE { VARIANCE , DISCRIMINATOR , INTEGRAL , CURVATURE };
+  typedef std::map<int,double> id_map;
+  //for now I just want to use the discriminator search -- Jingke
+  //we could smoothen the waveform and downsample to achieve complex algorithms
+  //keep these in case we want to go back
+  //  enum SEARCH_MODE { VARIANCE , DISCRIMINATOR , INTEGRAL , CURVATURE };
 
 private:
+  int FindChannelPulses(ChannelData* chdata);
+  int FindChannelSpikes(ChannelData* chdata);
+  /// Search for pulses using a simple discrimination threshold
+  int DiscriminatorSearch(ChannelData* chdata, const double * wave,
+			  std::vector<int>& start_index, 
+			  std::vector<int>& end_index,
+			  int start_add_nsamps, int end_add_nsamps);
+
+  /// resolve pileup pulses/spikes
+  /// only trust the result if  within a pulse/spike
+  /// may pickup baseline fluctuations otherwise
+  int ResolvePileUps(ChannelData* chdata, const double * wave,
+		      std::vector<int>& start_index, 
+		      std::vector<int>& end_index,
+		      double pileup_threshold, int step=1, 
+		      int search_start=0, int search_end=-1);
   ///parameters
-  SEARCH_MODE mode;                ///< Which search function to use
-  ///currently only used in discriminator and integral search
-  double search_start_time;        ///< Time in us to start search
-  double search_end_time;          ///< Time in us to start search
-  ///parameters for variance search
-  int start_window;                ///< sample window to start looking in
-  double min_start_variance;       ///< min variance to define a start
-  int min_resolution;              ///< What is this?
+  //  SEARCH_MODE mode;                ///< Which search function to use
+  double search_start_time;                  ///< Time in us to start search
+  double search_end_time;                    ///< Time in us to end search
   ///parameters for discriminator search
-  bool discriminator_relative;     ///< is disc value relative to baseline?
-  double discriminator_value;      ///< discriminator treshold value in counts
-  bool use_baseline_sigma;         ///< if we want to use the baseline fluctuation
-  double discriminator_nsigma;     ///< discriminator treshold value in baseline sigmas
-  int discriminator_start_add;     ///< n samples to add before start
-  int discriminator_end_add;       ///< n samples to add after end
-  //parameters for integral search
-  // bool normalize_to_npe;           ///< Scale all searches by spemean?
-  // double integral_start_time;      ///< time in us over which photons arrive
-  // double integral_end_time;        ///< time at end of pulse to be below thresh
-  // double integral_start_threshold; ///< amount in npe integral must fall
-  // double integral_end_threshold;   ///< end when npe integral below thresh
-  // double min_sep_time;             ///< minimum time two pulses must be apart
-  // double multipulse_thresh_value;  ///< secondary must be > this*prev integral
-  double amplitude_start_threshold;   ///< before broad integral search, look for signal above this threshold
-  // double amplitude_end_threshold;  ///< signal must fall below this threshold to end pulse
-  // double min_pulse_time;           ///< minimum length of pulse before ends naturally
-  // double lookback_time;            ///< samples to look back for pileup
-  ///parameters for integral search by jingke
-  int integral_window_nsamps;      ///< number of samples in the integral window
-  int moving_step_nsamps;          ///< number of samples to move after each integral step
-  double integral_start_threshold; ///< integral threshold to start a pulse
-  double integral_end_threshold;   ///< integral threshold to end a pulse
-  double pileup_factor_rel;        ///< for a pileup if the later integral has to be X times larger
-  double pileup_factor_abs;        ///< for a pileup if the later integral has to be X value larger
-  //parameters for curvature search
-  int down_sample_factor;          ///< reduce the integral vector size by this factor 
-  double pulse_start_curvature;    ///< curvature threshold to start a new pulse  
-  int pile_up_curvature;           ///< curvature threshold to start a pile up pulse
-  double pulse_end_slope;          ///< slope threshold to end a pulse
+  std::map<int,double> ch_pulse_filter_us;   ///< estimate of the pulse width in us
+  std::map<int,double> ch_pulse_thresholds;  ///< discriminator threshold values for pulse finding
+  std::map<int,double> ch_spike_thresholds;  ///< discriminator threshold values for spike finding
+  bool relative_bls_threshold;               ///< Is the threshold relative to baseline sigma
+  bool relative_spe_threshold;               ///< Is the threshold relative to spe size
+  //if both relative to bls and spe are set to be true, initilize will fail
+  int pulse_start_add_us;                    ///< time in us to add before pulse start
+  int pulse_end_add_us;                      ///< time in us to add after pulse end
+  //  int spike_edge_add_nsamps;                 ///< n samples to add on spike edge
 };
 
 //override stream ops for SearchMode
-std::istream& operator>>(std::istream& in, PulseFinder::SEARCH_MODE& m);
-std::ostream& operator<<(std::ostream& out, const PulseFinder::SEARCH_MODE& m);
+// std::istream& operator>>(std::istream& in, PulseFinder::SEARCH_MODE& m);
+// std::ostream& operator<<(std::ostream& out, const PulseFinder::SEARCH_MODE& m);
 
 #endif

@@ -158,13 +158,23 @@ int RelativeThresholdSearch(std::vector<double> wave, double start_threshold, do
       continue;
     }
     if(mask[i]==-1){
-      if(start_index.size()==end_index.size() && end_index.size()>0) end_index.back()=i;
+      if(start_index.size()==0){
+	if(i>search_start){
+	  start_index.push_back(search_start);
+	  end_index.push_back(i);
+	}
+      }
+      else if(start_index.size()==end_index.size()) end_index.back()=i;
       else if(start_index.size()==end_index.size()+1) end_index.push_back(i);
     }
   }//end for
-
+  if(start_index.size()==end_index.size()+1){
+    if(start_index.back()<search_end) end_index.push_back(search_end);
+    else start_index.pop_back();
+  }
+  
   if(start_index.size()!=end_index.size() || start_index.size()==0){
-    std::cerr<<"start and end index vector size: "<<start_index.size()<<'\t'<<end_index.size()<<std::endl;
+    std::cerr<<"*** Error *** start and end index vector size: "<<start_index.size()<<'\t'<<end_index.size()<<std::endl;
     if(start_index.size()) start_index.clear();
     if(end_index.size()) end_index.clear();
     return -1;
