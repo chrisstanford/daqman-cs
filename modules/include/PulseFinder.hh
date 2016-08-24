@@ -36,6 +36,7 @@ private:
   int DiscriminatorSearch(ChannelData* chdata, const double * wave,
 			  std::vector<int>& start_index, 
 			  std::vector<int>& end_index,
+			  double threshold,
 			  int start_add_nsamps, int end_add_nsamps);
 
   /// resolve pileup pulses/spikes

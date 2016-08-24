@@ -4,6 +4,7 @@
     @ingroup modules
 */
 
+//todo: we may want to add a function to know which channels are summed
 #ifndef SUMCHANNELS_h
 #define SUMCHANNELS_h
 

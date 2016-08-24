@@ -10,7 +10,7 @@
 
 #include "Message.hh"
 #include "PulseUtility.hh"
-#include "Peak.hh"
+#include "Spike.hh"
 #include <vector>
 #include <iostream>
 
@@ -43,7 +43,7 @@ public:
   double time_since_last; ///< time from the end of the last pulse
   std::vector<double> fparameters; ///< fparameters for given prompt time
   std::vector<double> tparameters; ///< time for integral to reach certain fractions
-  std::vector<Peak>  peaks; ///< peaks in this pulse
+  std::vector<Spike>  spikes; ///< spikes in this pulse
   double gatti;    ///< gatti parameter for this pulse
   double mean_time; ///< mean time of this pulse for PSD studies
   double test;     ///< test variable
@@ -73,7 +73,7 @@ inline void Pulse::Clear()
   time_since_last = 0;
   if(fparameters.size()) fparameters.clear();
   if(tparameters.size()) tparameters.clear();
-  if(peaks.size()) peaks.clear();
+  if(spikes.size()) spikes.clear();
   gatti = 0;
   mean_time = -1;
   test = 0;
