@@ -35,17 +35,15 @@ private:
   /// Search for pulses using a simple discrimination threshold
   int DiscriminatorSearch(ChannelData* chdata, const double * wave,
 			  std::vector<int>& start_index, 
-			  std::vector<int>& end_index,
-			  double threshold,
-			  int start_add_nsamps, int end_add_nsamps);
-
+			  std::vector<int>& end_index, double threshold,
+			  int pulse_start_add_nsamps, int pulse_end_add_nsamps);
   /// resolve pileup pulses/spikes
   /// only trust the result if  within a pulse/spike
   /// may pickup baseline fluctuations otherwise
   int ResolvePileUps(ChannelData* chdata, const double * wave,
 		      std::vector<int>& start_index, 
 		      std::vector<int>& end_index,
-		      double pileup_threshold, int step=1, 
+		      double pileup_threshold, int step=3, 
 		      int search_start=0, int search_end=-1);
   ///parameters
   //  SEARCH_MODE mode;                ///< Which search function to use

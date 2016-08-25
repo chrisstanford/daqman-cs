@@ -27,7 +27,9 @@ public:
 
 inline void Spike::Clear()
 {
-  spike_time = 0;
+  start_time = 0;
+  peak_time = 0;
+  width = 0;
   peak_amplitude = -1;
   integral=0;
 };

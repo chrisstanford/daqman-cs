@@ -18,6 +18,10 @@ int EvaluatePulse(Pulse& pulse, ChannelData* chdata, double max_peak_time=-1);
 bool RelativeThresholdCrossed(double x1, double x2, double threshold);
 //determine either x1 or x2 has smaller amplitude in the direction given by sign
 bool FirstAmplitudeIsSmaller(double x1, double x2, double dumb_sign=1);
+//calculate the gaussian function value for convolutions, etc.
+double gaussian(double x, double mean, double sigma);
+//smooth a waveform with a Gaussian function
+bool SmoothWaveform(std::vector<double> &smoothed, int nsamps, const double *wave,  double sigma);
 //function to search for pulses/spikes with a relative threshold
 //the waveform can be smoothed/downsampled (pulse finding) or not (spike finding)
 int RelativeThresholdSearch(std::vector<double> wave, double start_threshold, double end_threshold,

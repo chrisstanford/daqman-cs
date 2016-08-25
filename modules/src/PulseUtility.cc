@@ -123,6 +123,37 @@ int EvaluatePulse(Pulse& pulse, ChannelData* chdata, double max_peak_time){
   return 0;
 }
 
+//calculate the gaussian function value for convolutions, etc.
+double gaussian(double x, double mean, double sigma){
+  if(std::fabs(x-mean)>=10*sigma) return 0;
+  double arg = (x - mean)/sigma;
+  arg *= -0.5 * arg;
+  return 0.3989422804/sigma*exp(arg);
+}
+
+//smooth a waveform with a Gaussian function
+bool SmoothWaveform(std::vector<double> &smoothed, int nsamps, const double *wave,  double sigma){
+  
+  if(nsamps<1 || sigma <=1) return false;
+  smoothed.resize(nsamps);
+  int start, end;
+  double result=0;
+
+  for (int ii=0; ii<nsamps; ii++){
+    start = ii - 3*sigma;
+    end   = ii + 3*sigma;
+    if(start<0)       start= 0;
+    if(end>=nsamps) end  = nsamps-1;
+    result = 0.;
+    for(int jj=start; jj<=end; jj++){
+      result += wave[jj]*gaussian(jj, ii, sigma);
+    }//end for jj
+    smoothed.at(ii) = result;
+  }//end for ii
+
+  return true;
+}
+
 int RelativeThresholdSearch(std::vector<double> wave, double start_threshold, double end_threshold,
 			    std::vector<int> & start_index, std::vector<int> & end_index, 
 			    int pulse_edge_add, int step_size, int search_start, int search_end){
