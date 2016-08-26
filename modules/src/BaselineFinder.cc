@@ -84,6 +84,7 @@ int BaselineFinder::Finalize()
 //also do sum channel after baseline finding
 int BaselineFinder::Process(ChannelData* chdata)
 {
+  if(chdata->channel_id==ChannelData::CH_SUM) return 0;
   int run_result=-1;
   if( flat_channels.find( chdata->channel_id ) == flat_channels.end())
     run_result = DriftingBaseline(chdata);
@@ -309,7 +310,8 @@ int BaselineFinder::DriftingBaseline(ChannelData* chdata)
   
   double sum2=0;
   sum=0, sum_nsamps=0;
-  for(int i=0; i<pulse_start_index; i++){
+  //  for(int i=0; i<pulse_start_index; i++){
+  for(int i=0; i<nsamps; i++){
     if(!mask[i]){
       sum+=wave[i]; sum2+=wave[i]*wave[i];sum_nsamps++; 
     }
@@ -356,7 +358,9 @@ int BaselineFinder::FlatBaseline(ChannelData* chdata){
   if(min_bl<1) min_bl=1;//can not be 0 to avoid saturation pulses
   if(max_bl-min_bl<1) return -1;
   std::vector<int> stats (max_bl-min_bl+1, 0);
+  pulse_start_index = nsamps;
   for(int samp=0; samp<pulse_start_index; samp++){
+    //  for(int samp=0; samp<nsamps; samp++){
     if(wave[samp]<min_bl || wave[samp]>max_bl) continue;
     stats.at(wave[samp]-min_bl) ++;
   }

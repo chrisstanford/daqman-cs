@@ -109,8 +109,8 @@ int main(int argc, char** argv)
   AsyncEventHandler thread1;
   modules->AddAsyncReceiver(&thread1);
   thread1.AddModule(new ConvertData);
-  thread1.AddModule(new SumChannels);
   thread1.AddModule(new BaselineFinder);
+  thread1.AddModule(new SumChannels);
   thread1.AddModule(new Integrator);
   thread1.AddModule(new EvalRois);
   thread1.AddModule(new SpeFinder);

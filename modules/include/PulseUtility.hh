@@ -22,6 +22,8 @@ bool FirstAmplitudeIsSmaller(double x1, double x2, double dumb_sign=1);
 double gaussian(double x, double mean, double sigma);
 //smooth a waveform with a Gaussian function
 bool SmoothWaveform(std::vector<double> &smoothed, int nsamps, const double *wave,  double sigma);
+//smooth a waveform with a simple running sum
+bool RunningSumWaveform(std::vector<double> &smoothed, int nsamps, const double *wave,  int sigma);
 //function to search for pulses/spikes with a relative threshold
 //the waveform can be smoothed/downsampled (pulse finding) or not (spike finding)
 int RelativeThresholdSearch(std::vector<double> wave, double start_threshold, double end_threshold,

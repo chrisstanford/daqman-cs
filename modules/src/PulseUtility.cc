@@ -132,7 +132,7 @@ double gaussian(double x, double mean, double sigma){
 }
 
 //smooth a waveform with a Gaussian function
-bool SmoothWaveform(std::vector<double> &smoothed, int nsamps, const double *wave,  double sigma){
+bool SmoothWaveform(std::vector<double> &smoothed, int nsamps, const double *wave,  int sigma){
   
   if(nsamps<1 || sigma <=1) return false;
   smoothed.resize(nsamps);
@@ -153,6 +153,43 @@ bool SmoothWaveform(std::vector<double> &smoothed, int nsamps, const double *wav
 
   return true;
 }
+
+//smooth a waveform with a simple running sum
+bool RunningSumWaveform(std::vector<double> &smoothed, int nsamps, const double *wave,  int sigma){
+  
+  if(nsamps<1 || sigma <=1) return false;
+  smoothed.resize(nsamps);
+  double result=0;
+  
+  for (int ii=0; ii<nsamps; ii++){
+    result += wave[ii];
+    if(ii>=sigma) result -= wave[ii-sigma];
+    smoothed.at(ii) = result;
+  }//end for ii
+
+  return true;
+}
+// bool RunningSumWaveform(std::vector<double> &smoothed, int nsamps, const double *wave,  int sigma){
+  
+//   if(nsamps<1 || sigma <=1) return false;
+//   smoothed.resize(nsamps);
+//   int start, end;
+//   double result=0;
+  
+//   for (int ii=0; ii<nsamps; ii++){
+//     start = ii - sigma/2;
+//     end   = ii + sigma - sigma/2;
+//     if(start<0)       start= 0;
+//     if(end>=nsamps) end  = nsamps-1;
+//     result = 0.;
+//     for(int jj=start; jj<=end; jj++){
+//       result += wave[jj];
+//     }//end for jj
+//     smoothed.at(ii) = result;
+//   }//end for ii
+
+//   return true;
+// }
 
 int RelativeThresholdSearch(std::vector<double> wave, double start_threshold, double end_threshold,
 			    std::vector<int> & start_index, std::vector<int> & end_index, 

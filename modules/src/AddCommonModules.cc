@@ -13,8 +13,8 @@
 int EventHandler::AddCommonModules()
 {
   AddModule<ConvertData>();
-  AddModule<SumChannels>();
   AddModule<BaselineFinder>();
+  AddModule<SumChannels>();
   AddModule<Integrator>();
   AddModule<SpeFinder>();
   AddModule<EvalRois>();

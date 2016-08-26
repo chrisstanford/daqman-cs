@@ -47,6 +47,7 @@ public:
   int nchans; ///< physical channels that lit up 
   bool saturated; ///< true if any channel hit the limit of its digitizer range
   bool pulses_aligned; ///< true if the pulse edges on all channels are aligned
+  std::set<int> channels_summed; ///< channels that contribute to the sum channel
   std::vector<double> generic; ///< vector of generic results for testing
   std::vector<ChannelData> channels;  ///< results for each channel
   
@@ -71,7 +72,7 @@ public:
     return 0;
   }
   
-  ClassDef(EventData,15)
+  ClassDef(EventData,16)
 };
 
 inline void EventData::Clear()

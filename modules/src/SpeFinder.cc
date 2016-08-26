@@ -1,7 +1,7 @@
 #include "SpeFinder.hh"
 //#include "EventHandler.hh"
 #include "ConvertData.hh"
-//#include "RootWriter.hh"
+#include "PulseUtility.hh"
 #include "BaselineFinder.hh"
 #include <vector>
 #include <numeric>
@@ -12,13 +12,17 @@ SpeFinder::SpeFinder():
   AddDependency<BaselineFinder>();
   RegisterParameter("search_start_time", search_start_time = 1.,
                     "Time in [us] to start searching for spe");
-  RegisterParameter("search_end_time", search_end_time = 5.,
+  RegisterParameter("search_end_time", search_end_time = 50.,
                     "Time in [us] to end searching for spe");
-  RegisterParameter("threshold_nsigmas", threshold_nsigmas = -2.5,
-                    "Threshold in the unit of baseline sigmas");
-  RegisterParameter("pulse_edge_add", pulse_edge_add  = 3,
+  RegisterParameter("ch_spe_thresholds", ch_spe_thresholds,
+		    "discriminator threshold values for spe finding");
+  RegisterParameter("relative_bls_threshold", relative_bls_threshold = false,
+		    "Is the threshold relative to baseline sigma");
+  RegisterParameter("relative_spe_threshold", relative_spe_threshold = false,
+		    "Is the threshold relative to spe size");
+  RegisterParameter("spe_edge_add_nsamps", spe_edge_add_nsamps  = 3,
                     "Number of samples to be added at the edge of possible pulses");
-  RegisterParameter("min_baseline_length", min_baseline_length = 0.04,
+  RegisterParameter("min_baseline_length_us", min_baseline_length_us = 0.04,
                     "Time in us of good baseline before and after pulse");
 }
 
@@ -31,9 +35,18 @@ int SpeFinder::Initialize()
 {
   //make sure we don't process the sum channel
   _skip_sum = true;
-  if(pulse_edge_add<1) pulse_edge_add = 1;
-  if(threshold_nsigmas>0) threshold_nsigmas *= -1;
-  if(threshold_nsigmas>-2) threshold_nsigmas = -2;
+  if(search_start_time>=search_end_time || spe_edge_add_nsamps<1 ||
+     (relative_bls_threshold && relative_spe_threshold) ||
+     min_baseline_length_us<=0 ) return -1;
+  //threshold can not be 0
+  for(id_map::iterator it = ch_spe_thresholds.begin();
+      it != ch_spe_thresholds.end(); it++){
+    if(it->second==0){
+      Message(ERROR)<<"Channel "<<it->first<< " has spe search threshold set to be 0!\n";
+      return 1;
+    }//end if
+  }//end for
+
   return 0;
 }
 
@@ -44,45 +57,72 @@ int SpeFinder::Finalize()
 
 int SpeFinder::Process(ChannelData* chdata)
 {
-  //need a good baseline
-  if(!chdata->baseline.found_baseline) {
-    return 0;
+  if(!chdata->baseline.found_baseline) return 0;
+	
+  double threshold = 0;
+  id_map::iterator it = ch_spe_thresholds.find(chdata->channel_id);
+  if(it != ch_spe_thresholds.end() && it->second!=0)
+    threshold = it->second;
+  else{
+    it = ch_spe_thresholds.find(ChannelData::CH_DEFAULT);
+    if(it != ch_spe_thresholds.end() && it->second!=0)
+      threshold =it->second;
+    else return 0; //we simply don't process this channel
+  }//end else
+  
+  if(relative_bls_threshold){
+    if(chdata->baseline.sigma>0) threshold *= chdata->baseline.sigma;
+    else{
+      Message(ERROR)<<"Channel "<<chdata->channel_id<< " has invalid baseline!\n";
+      return 0;
+    }
   }
+
+  if(relative_spe_threshold){
+    if(chdata->spe_mean>0){
+      threshold *= chdata->spe_mean;
+      if(chdata->spe_mean==1){
+	Message(WARNING)<<"Channel "<<chdata->channel_id<< " uses spe_mean unspecified!\n";
+      }//end if ==1
+    }//end if >0
+    else{
+      Message(ERROR)<<"Channel "<<chdata->channel_id<< " has incorrectly specified spe_mean!\n";
+      return -1;
+    }//end else
+  }//end relative spe
 
   int search_start_index  = chdata->TimeToSample(search_start_time);
   int search_end_index    = chdata->TimeToSample(search_end_time);
-  if(search_end_index<search_start_index + pulse_edge_add*2) 
+  if(search_end_index<search_start_index + spe_edge_add_nsamps*2) 
     return 0;
 
-  int min_baseline_nsamps = min_baseline_length*chdata->sample_rate;
-  if(min_baseline_nsamps<1) min_baseline_nsamps = 1;
+  int min_baseline_nsamps = min_baseline_length_us*chdata->sample_rate+1;
 
   //use the subtracted waveform to search for spe start and end
   double* subtracted = chdata->GetBaselineSubtractedWaveform();
-  double check_val = chdata->baseline.sigma*threshold_nsigmas;
   std::vector<int> start_index;
   std::vector<int> end_index;
 
   int first_baseline_samp = -1, last_baseline_samp = -1;
-  bool in_pulse = false;
-  for(int index = search_start_index+pulse_edge_add; 
-      index<search_end_index-pulse_edge_add; index++){
-    if(subtracted[index]<=check_val){
-      if(subtracted[index-1]>check_val){//if just come to a pulse
-        in_pulse = true;
-	start_index.push_back(index-pulse_edge_add );
+  bool in_spe = false;
+  for(int index = search_start_index+spe_edge_add_nsamps; 
+      index<search_end_index-spe_edge_add_nsamps; index++){
+    if(FirstAmplitudeIsSmaller(threshold, subtracted[index], threshold)){
+      if(FirstAmplitudeIsSmaller(subtracted[index-1],threshold,threshold)){//if just come to a spe
+        in_spe = true;
+	start_index.push_back(index-spe_edge_add_nsamps );
       }
-      if(subtracted[index+1]>check_val){//if just leave a pulse
-        if(in_pulse) end_index.push_back(index+pulse_edge_add );
-        in_pulse = false;
+      if(FirstAmplitudeIsSmaller(subtracted[index+1],threshold,threshold)){//if about to leave spe
+        if(in_spe) end_index.push_back(index+spe_edge_add_nsamps );
+        in_spe = false;
       }
     }//end if subtracted index <=
-    else{//if not in a pulse
+    else{//if not in a spe
       if(first_baseline_samp<0) first_baseline_samp = index;
       last_baseline_samp = index;
     }
   }
-  if(in_pulse) start_index.pop_back();
+  if(in_spe) start_index.pop_back();
   if(start_index.size()!=end_index.size() || start_index.size()==0
      || first_baseline_samp<0 || last_baseline_samp<0){
     start_index.clear();
@@ -129,12 +169,8 @@ int SpeFinder::Process(ChannelData* chdata)
     bl_mean /= 2.*min_baseline_nsamps;
     bl_sigma /= 2.*min_baseline_nsamps;
     bl_sigma = std::sqrt(bl_sigma-bl_mean*bl_mean);
-    spe_integral = bl_mean*(end_index.at(i)-start_index.at(i)+1) - spe_integral; 
-    peak_amplitude = bl_mean - peak_amplitude;
-    //maybe leave this cut to the root file?
-    // if(bl_sigma>=1.2*chdata->baseline.sigma 
-    //    || std::abs(bl_mean)*(end_index.at(i)-start_index.at(i)+1)>spe_integral*0.05)
-    //   continue;
+    spe_integral -= bl_mean*(end_index.at(i)-start_index.at(i)+1);
+    peak_amplitude = std::fabs(bl_mean - peak_amplitude);
 
     //store spe
     Spe a_spe;

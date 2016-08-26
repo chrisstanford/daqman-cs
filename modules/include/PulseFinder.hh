@@ -56,8 +56,8 @@ private:
   bool relative_bls_threshold;               ///< Is the threshold relative to baseline sigma
   bool relative_spe_threshold;               ///< Is the threshold relative to spe size
   //if both relative to bls and spe are set to be true, initilize will fail
-  int pulse_start_add_us;                    ///< time in us to add before pulse start
-  int pulse_end_add_us;                      ///< time in us to add after pulse end
+  double pulse_start_add_us;                    ///< time in us to add before pulse start
+  double pulse_end_add_us;                      ///< time in us to add after pulse end
   //  int spike_edge_add_nsamps;                 ///< n samples to add on spike edge
 };
 

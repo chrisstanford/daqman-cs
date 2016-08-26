@@ -169,7 +169,8 @@ int PulseFinder::FindChannelPulses(ChannelData* chdata){
   std::vector<double> smoothed;
   if(filter_nsamps>1){
     smoothed.resize(chdata->nsamps);
-    bool is_good = SmoothWaveform(smoothed, chdata->nsamps, wave, filter_nsamps);
+    //    bool is_good = SmoothWaveform(smoothed, chdata->nsamps, wave, filter_nsamps);
+    bool is_good = RunningSumWaveform(smoothed, chdata->nsamps, wave, filter_nsamps);
     if(!is_good) return -1;
     wave = &(smoothed[0]);
   }
@@ -208,7 +209,7 @@ int PulseFinder::FindChannelPulses(ChannelData* chdata){
       Pulse pulse;
       pulse.start_index = start_index_split[i];
       pulse.end_index = end_index_split[i];
-      EvaluatePulse(pulse, chdata, 0.2);
+      EvaluatePulse(pulse, chdata, -1);
       //evaluate the pulse parameters depending on other pulses
       if(chdata->pulses.size()){
 	pulse.time_since_last=pulse.half_max_time-chdata->pulses.back().end_time;
