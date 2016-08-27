@@ -33,7 +33,8 @@ void SetOutputFile(RootWriter* writer, const char* inputfile){
       fname = fname.substr(fname.rfind('/')+1);
     }
     //remove filename suffix
-    fname = fname.substr(0, fname.find('.'));
+    if(fname.find('.') != std::string::npos)
+      fname = fname.substr(0, fname.find('.'));
     //append the root filename
     fname.append(".root");
     writer->SetFilename(fname);

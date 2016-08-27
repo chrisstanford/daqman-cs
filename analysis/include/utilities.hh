@@ -58,5 +58,10 @@ void SaveHistoToFile(TObject* c);
 /// Add menus to TH1{F,D}
 void CustomizeHistogramMenus();
 
+/// Fit the SPE spectrum
+void FitChannelSPE(int ch_id, double fit_min, double fit_max, 
+		   double max_baseline_sigma=100, double min_spe_amp=3, 
+		   bool single_gaus=true);
+
 /// @}
 #endif

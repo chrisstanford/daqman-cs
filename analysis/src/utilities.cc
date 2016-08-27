@@ -307,3 +307,141 @@ void CustomizeHistogramMenus()
   
 
 }
+
+
+/// Fit the SPE spectrum
+void FitChannelSPE(int ch_id, double fit_min, double fit_max, 
+		   double max_baseline_sigma, double min_spe_amp, 
+		   bool single_gaus){
+  
+  TTree *Events = (TTree*)(gDirectory->Get("Events"));  
+  if(!Events || Events->GetEntries()<1){
+    std::cout<<"No data available!"<<std::endl;
+    return;
+  }
+  
+  EventData* evt = 0;
+  Events->SetBranchAddress("event",&evt);
+  
+  int run_id = Events->GetMaximum("run_id");
+  char chname[30];
+  sprintf(chname, "Run%d_Ch%d_SPE",run_id,ch_id);
+  TH1F *hspe = (TH1F*)gDirectory->Get(chname);
+  if(hspe) delete hspe;
+  hspe = new TH1F(chname, chname, 200,-50,550);
+  hspe->SetDirectory(0);
+  sprintf(chname, "Run%d_Ch%d_SPE_plot",run_id,ch_id);
+  //  sprintf(chname, "Channel_%d_SPE_plot",ch_id);
+  TCanvas *cspe = (TCanvas *)(gDirectory->Get(chname));
+  if(cspe) cspe->cd();
+  else cspe=new TCanvas(chname, chname, 800, 600);
+  cspe->cd();  
+  //  cspe->SetLogy(true);
+
+  ChannelData* ch_signal = NULL;
+
+  for(int entry=0; entry<Events->GetEntries(); entry++){
+  //  for(int entry=0; entry<1000; entry++){
+    Events->GetEntry(entry);
+    //look at the signal channel
+    ch_signal = evt->GetChannelByID(ch_id);
+    if(!ch_signal){
+      std::cout<<ch_id<<" channel does not exist in the channel data!"<<std::endl;
+      break;
+    }
+    if(ch_signal->single_pe.size()<1){
+      //      std::cout<<"failed to find correct signal pulses in event "<<evt->event_id<<std::endl;
+      continue;
+    }
+    for(size_t spe_id=0; spe_id<ch_signal->single_pe.size(); spe_id++){
+      if(ch_signal->single_pe.at(spe_id).baseline_sigma>max_baseline_sigma ||
+	 ch_signal->single_pe.at(spe_id).amplitude<min_spe_amp) continue;
+      hspe->Fill(-ch_signal->single_pe.at(spe_id).integral);
+    }
+  }//end for loop
+
+  hspe->Draw();
+
+  int spe_bin = hspe->GetMaximumBin();
+  double spe_peak = hspe->GetBinContent(spe_bin);
+  double ped_peak = spe_peak;
+  
+  TF1 *fspe=(TF1*)(gDirectory->Get("fspe"));
+  if(fspe) fspe->SetRange(fit_min, fit_max);
+  else fspe=new TF1("fspe", "gaus(0)+gaus(3)", fit_min, fit_max);
+  fspe->SetParameters(ped_peak,0,4,spe_peak,200,50);
+  fspe->FixParameter(1,0);
+  if(single_gaus){
+    fspe->FixParameter(0,0);
+    fspe->FixParameter(2,1);
+  }
+
+  std::cout<<"******** Fitting data: "<<std::endl;
+  int fitresult = hspe->Fit("fspe", "REM");
+  std::cout<<"******** The Fit result is: "<<fitresult<<std::endl
+	   <<"******** The Fit Chi2/NDF is: "<<fspe->GetChisquare()<<'/'<<fspe->GetNDF()<<std::endl
+	   <<"******** The Probability of the fit is: "<<TMath::Prob(fspe->GetChisquare(), fspe->GetNDF())
+	   <<std::endl<<std::endl;
+  ped_peak = fspe->GetParameter(0);
+  spe_peak = fspe->GetParameter(3);
+  fspe->SetParameter(0,0);
+  fspe->SetLineColor(3);
+  fspe->DrawCopy("same");
+  fspe->SetParameter(0,ped_peak);
+  fspe->SetParameter(3,0);
+  fspe->SetLineColor(4);
+  fspe->DrawCopy("same");
+  cspe->Modified();
+  cspe->Update();
+
+  while(1){
+
+    std::cout<<"Would you like to change the fit range and redo the fit? y/[n]"<<std::endl;
+    std::string result;
+    getline(std::cin, result);
+    if (result == "" || (result[0]!='y'&&result[0]!='Y')) break;
+
+    std::cout<<"Please enter the new lower bound for SPE fit:"<<std::endl;
+    getline(std::cin, result);
+    fit_min = atof(result.c_str());
+    std::cout<<"Please enter the new upper bound for SPE fit:"<<std::endl;
+    getline(std::cin, result);
+    fit_max = atof(result.c_str());
+    
+    if(fit_max<=fit_min || fit_min<hspe->GetBinLowEdge(1) ||
+       fit_max>hspe->GetBinLowEdge(hspe->GetNbinsX())+hspe->GetBinWidth(1)){
+      std::cout<<"Illegal fit range!"<<std::endl;
+    }
+
+    cspe->cd();  
+    //    cspe->SetLogy(true);
+    hspe->Draw();
+    ped_peak = hspe->GetBinContent(hspe->GetMaximumBin());
+    spe_peak = hspe->GetBinContent(hspe->FindBin(40));
+    fspe->SetParameters(ped_peak,0,4,spe_peak,40,20);
+    fspe->SetRange(fit_min, fit_max);
+    fspe->SetLineColor(2);
+    fitresult = hspe->Fit("fspe", "REM");
+    std::cout<<"******** The Fit result is: "<<fitresult<<std::endl
+	     <<"******** The Fit Chi2/NDF is: "<<fspe->GetChisquare()<<'/'<<fspe->GetNDF()<<std::endl
+	     <<"******** The Probability of the fit is: "<<TMath::Prob(fspe->GetChisquare(), fspe->GetNDF())
+	     <<std::endl<<std::endl;
+    ped_peak = fspe->GetParameter(0);
+    spe_peak = fspe->GetParameter(3);
+    fspe->SetParameter(0,0);
+    fspe->SetLineColor(3);
+    fspe->DrawCopy("same");
+    fspe->SetParameter(0,ped_peak);
+    fspe->SetParameter(3,0);
+    fspe->SetLineColor(4);
+    fspe->DrawCopy("same");
+    cspe->Modified();
+    cspe->Update();
+
+  }
+
+  std::cout<<"Final fit result: ( "<<ch_id<<" , "<<fspe->GetParameter(4)<<" ) "<<std::endl;
+
+  return;
+
+}

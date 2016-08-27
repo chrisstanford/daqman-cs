@@ -37,7 +37,7 @@ int SpeFinder::Initialize()
   _skip_sum = true;
   if(search_start_time>=search_end_time || spe_edge_add_nsamps<1 ||
      (relative_bls_threshold && relative_spe_threshold) ||
-     min_baseline_length_us<=0 ) return -1;
+     min_baseline_length_us<0 ) return -1;
   //threshold can not be 0
   for(id_map::iterator it = ch_spe_thresholds.begin();
       it != ch_spe_thresholds.end(); it++){
