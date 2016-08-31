@@ -351,10 +351,17 @@ int PulseFinder::ResolvePileUps(ChannelData* chdata, const double * wave,
 				int search_start, int search_end){
 
   if(!chdata || !wave || step<1 || threshold==0 || search_start<0 || 
-     search_end>=chdata->nsamps) return -1;
-  if(step<3) step=3;  
+     search_end>=chdata->nsamps || search_start>=search_end) return -1;
   if(start_index.size()) start_index.clear();
   if(end_index.size()) end_index.clear();
+  const int min_step = 3; //this is the best value for spike counting
+  if(step<min_step) step=min_step;  
+  //no point searching pileups if it is a small pulse
+  if(search_end-search_start<=min_step){
+    start_index.push_back(search_start);
+    end_index.push_back(search_end);
+    return 0;
+  }
   
   std::cout<<"Resolving overlaps for pulse: "<<chdata->SampleToTime(search_start)<<'\t'<<chdata->SampleToTime(search_end)<<std::endl;
 
@@ -363,34 +370,36 @@ int PulseFinder::ResolvePileUps(ChannelData* chdata, const double * wave,
   turnpoints.reserve(100);  
   peak.reserve(100);  
 
-  //we could use zero threshold to find the peaks and then compare peak to valley with threshold
-  //try the simple threshold comparison first
   for(int samp=search_start+1; samp<=search_end-1; samp++){
-    //here we come to a peak
-    if((RelativeThresholdCrossed(wave[samp-1],wave[samp],threshold) ||
-	(samp>=search_start+step && RelativeThresholdCrossed(wave[samp-step],wave[samp],threshold)) ) &&
-       (RelativeThresholdCrossed(wave[samp+1],wave[samp],threshold) ||
-	(samp+step<=search_end && RelativeThresholdCrossed(wave[samp+step],wave[samp],threshold)) ) ){
+    //here we come to a possible peak, w/ bigger amplitude than +/-1, or +/-step, or +/-step/2
+    if( (RelativeThresholdCrossed(wave[samp-1],wave[samp],threshold) ||
+	 (samp>=search_start+step && RelativeThresholdCrossed(wave[samp-step],wave[samp],threshold)) ||
+	 (step/2>min_step && samp>=search_start+step/2 && RelativeThresholdCrossed(wave[samp-step/2],wave[samp],threshold)) ) &&
+	(RelativeThresholdCrossed(wave[samp+1],wave[samp],threshold) ||
+	 (samp+step<=search_end && RelativeThresholdCrossed(wave[samp+step],wave[samp],threshold)) ||
+	 (step/2>min_step && samp+step/2<=search_end && RelativeThresholdCrossed(wave[samp+step/2],wave[samp],threshold))) ){
       std::cout<<"Possible peak at: "<<chdata->SampleToTime(samp)<<std::endl;
       //we need to make sure the first/last peak is complete
       if(peak.size()==0){
 	turnpoints.push_back(search_start);
 	peak.push_back(-1);
       }
-      //now this operation is safe
-      if(peak.back()==1){ //there is a peak just before this one, and there was not a valley
+      //there is a peak just before this one, see which one is bigger
+      if(peak.back()==1){
 	if(FirstAmplitudeIsSmaller(wave[turnpoints.back()], wave[samp], threshold)) turnpoints.back()=samp;
-      }//end if a peak before this one
-      else {//if there is a valley right before it or nothing
+      }
+      else {//if there is a valley right before it
 	turnpoints.push_back(samp);
 	peak.push_back(1);
       }//end else
     }//end if coming to a peak
     //here we come to a valley
     else if((RelativeThresholdCrossed(wave[samp],wave[samp-1],threshold) ||
-	     (samp>=search_start+step && RelativeThresholdCrossed(wave[samp],wave[samp-step],threshold)) ) &&
+	     (samp>=search_start+step && RelativeThresholdCrossed(wave[samp],wave[samp-step],threshold)) ||
+	     (step>min_step*2 && samp>=search_start+step/2 && RelativeThresholdCrossed(wave[samp],wave[samp-step/2],threshold)) ) &&
 	    (RelativeThresholdCrossed(wave[samp],wave[samp+1],threshold) ||
-	     (samp+step<=search_end && RelativeThresholdCrossed(wave[samp],wave[samp+step],threshold)) ) ){
+	     (samp+step<=search_end && RelativeThresholdCrossed(wave[samp],wave[samp+step],threshold)) ||
+	     (step>min_step*2 && samp+step/2<=search_end && RelativeThresholdCrossed(wave[samp],wave[samp+step/2],threshold))) ){
       std::cout<<"Possible valley at: "<<chdata->SampleToTime(samp)<<std::endl;
       //if there is another valley right before it but no peak in between
       if(peak.size()>0 && peak.back()==-1){ //there is a peak just before this one, and there was not a valley
@@ -416,10 +425,6 @@ int PulseFinder::ResolvePileUps(ChannelData* chdata, const double * wave,
     if((ii%2 && peak.at(ii)!=1) || (!(ii%2) && peak.at(ii)!=-1)) std::cout<<"Error in peak finding"<<std::endl;
   }
 
-  // std::cout<<std::endl<<"Pulse finding after combining"<<std::endl;
-  // for(size_t ii=0; ii<peak.size(); ii++)
-  //   std::cout<<turnpoints.at(ii)<<'\t'<<peak.at(ii)<<std::endl;
-
   for(size_t ii=0; ii<turnpoints.size(); ii++){
     if(peak.at(ii)!=-1) continue;
     if((ii+1)!=turnpoints.size()) start_index.push_back(turnpoints.at(ii));
@@ -430,7 +435,7 @@ int PulseFinder::ResolvePileUps(ChannelData* chdata, const double * wave,
     start_index.push_back(search_start);
     end_index.push_back(search_end);
   }
-
+  
   if(start_index.size()==end_index.size()) return 0;
   else{
     if(start_index.size()) start_index.clear();
