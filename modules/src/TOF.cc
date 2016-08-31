@@ -195,7 +195,7 @@ int TOF::ProcessDataChannel(ChannelData* chdata){
   }
   */  
   if(pulse.evaluated){//we found at least 1 valid pulse in this region
-    EvaluatePulse(pulse,chdata, 0.2);
+    //    EvaluatePulse(pulse,chdata, 0.2);
     pulse.half_max_time = half_max_time;
     //    if(integral<0) std::cout<<pulse.integral-integral<<"\t,percentage="<<pulse.integral/integral<<std::endl;
     pulse.integral = integral;

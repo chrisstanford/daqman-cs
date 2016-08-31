@@ -25,6 +25,7 @@
 #include "PulseFinder.hh"
 #include "Integrator.hh"
 #include "EvalRois.hh"
+#include "PulseEvaluator.hh"
 #include "SpeFinder.hh"
 #include "TOF.hh"
 #include "SpectrumMaker.hh"
@@ -115,6 +116,7 @@ int main(int argc, char** argv)
   thread1.AddModule(new EvalRois);
   thread1.AddModule(new SpeFinder);
   thread1.AddModule(new PulseFinder);
+  thread1.AddModule(new PulseEvaluator);
   thread1.AddModule(new TOF);
   async_threads.push_back(&thread1);
   // any more advanced functions?

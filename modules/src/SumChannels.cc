@@ -46,20 +46,21 @@ int SumChannels::Process(EventPtr event)
     //No point in summing channels
     return 0;
 
-  double sum_bl_mean=0, sum_bl_sigma=0;  
+  double sum_bl_sigma=0;  
   for(size_t i=0; i<data->channels.size(); i++){
     const ChannelData& chdata = data->channels[i];
     if( _skip_channels.find( chdata.channel_id) != _skip_channels.end() ||
 	chdata.channel_id < 0 || !(chdata.baseline.found_baseline) ){
       continue;
     }
-    sum_bl_mean += chdata.baseline.mean/chdata.spe_mean;
-    sum_bl_sigma += chdata.baseline.sigma/chdata.spe_mean;
+    if(sum_bl_sigma< chdata.baseline.sigma/chdata.spe_mean)
+      sum_bl_sigma = chdata.baseline.sigma/chdata.spe_mean;
     if(n_channels_summed == 0){
       sumdata.sample_rate = chdata.sample_rate;
       sumdata.trigger_index = chdata.trigger_index;
       sumdata.nsamps = chdata.nsamps;
       sumdata.waveform.resize(chdata.nsamps);
+      sumdata.subtracted_waveform.resize(chdata.nsamps);
     }
     
     //line up the waveforms of the channels
@@ -93,9 +94,9 @@ int SumChannels::Process(EventPtr event)
 
   if (n_channels_summed > 0){
     sumdata.waveform.assign(sumdata.subtracted_waveform.begin(), sumdata.subtracted_waveform.end());
-    for(int samp=0; samp<sumdata.nsamps; samp++) sumdata.waveform[samp] += sum_bl_mean;
-    sumdata.baseline.mean = sum_bl_mean;
-    sumdata.baseline.sigma = sum_bl_sigma/n_channels_summed;
+    sumdata.baseline.found_baseline = true;
+    sumdata.baseline.mean = 0;
+    sumdata.baseline.sigma = sum_bl_sigma;
     //reset the historical channel_start and end pointers
     sumdata.channel_start = (char*)(sumdata.GetWaveform());
     sumdata.channel_end = (char*)( sumdata.GetWaveform() + sumdata.nsamps );

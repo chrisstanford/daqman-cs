@@ -46,7 +46,6 @@ int EvalRois::Process(ChannelData* chdata)
     Pulse region;
     region.start_index = chdata->TimeToSample(_regions[index].first, true);
     region.end_index = chdata->TimeToSample(_regions[index].second, true);
-    EvaluatePulse(region, chdata, max_peak_time);
     //    region.Print(chdata->channel_id, index);
     chdata->regions.push_back(region);
   }

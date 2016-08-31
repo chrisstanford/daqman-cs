@@ -6,14 +6,14 @@
 
 #include <vector>
 
-class Pulse;
-class ChannelData;
+//class Pulse;
+//class ChannelData;
 
 //this function can not be part of the pulse class because pulse belongs to chdata
 //it can not be part of pulse finder because EvalRoi calls it too
 //function to calculate pulse parameters, if max_peak_time>0
 //the peak of the pulse should be within (start time, start time + max_peak_time)
-int EvaluatePulse(Pulse& pulse, ChannelData* chdata, double max_peak_time=-1);
+//int EvaluatePulse(Pulse& pulse, ChannelData* chdata, double max_peak_time=-1);
 //determine if x1->x2 cross the relative threshold, either positive or negative
 bool RelativeThresholdCrossed(double x1, double x2, double threshold);
 //determine either x1 or x2 has smaller amplitude in the direction given by sign
@@ -21,7 +21,7 @@ bool FirstAmplitudeIsSmaller(double x1, double x2, double dumb_sign=1);
 //calculate the gaussian function value for convolutions, etc.
 double gaussian(double x, double mean, double sigma);
 //smooth a waveform with a Gaussian function
-bool SmoothWaveform(std::vector<double> &smoothed, int nsamps, const double *wave,  double sigma);
+bool SmoothWaveform(std::vector<double> &smoothed, int nsamps, const double *wave, int sigma);
 //smooth a waveform with a simple running sum
 bool RunningSumWaveform(std::vector<double> &smoothed, int nsamps, const double *wave,  int sigma);
 //function to search for pulses/spikes with a relative threshold

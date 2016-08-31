@@ -80,8 +80,6 @@ int BaselineFinder::Finalize()
   return 0;
 }
 
-//@todo: need to skipe sum channel for baseline finding
-//also do sum channel after baseline finding
 int BaselineFinder::Process(ChannelData* chdata)
 {
   if(chdata->channel_id==ChannelData::CH_SUM) return 0;

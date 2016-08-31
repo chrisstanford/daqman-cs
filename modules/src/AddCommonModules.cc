@@ -8,6 +8,7 @@
 #include "SumChannels.hh"
 #include "EvalRois.hh"
 #include "Integrator.hh"
+#include "PulseEvaluator.hh"
 #include "AverageWaveforms.hh"
 
 int EventHandler::AddCommonModules()
@@ -19,8 +20,9 @@ int EventHandler::AddCommonModules()
   AddModule<SpeFinder>();
   AddModule<EvalRois>();
   AddModule<PulseFinder>();
+  AddModule<PulseEvaluator>();
   AddModule<TOF>();
   AddModule<PSD>();
   AddModule<AverageWaveforms>();
-  return 9;
+  return 11;
 }

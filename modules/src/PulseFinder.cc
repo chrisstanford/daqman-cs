@@ -4,12 +4,15 @@
 #include "Integrator.hh"
 #include "ConvertData.hh"
 //#include "RootWriter.hh"
+#include "PulseUtility.hh"
 #include "intarray.hh"
 #include "TMath.h"
 #include <algorithm>
 #include <numeric>
 #include <stdexcept>
 #include <cmath>
+#include <fstream>
+#include <cstdio>
 
 PulseFinder::PulseFinder() : 
   BaseModule(GetDefaultName(), "Search for individual physical scintillation pulses within the hardware trigger")
@@ -91,25 +94,56 @@ int PulseFinder::Process(EventPtr evt)
 {
     EventDataPtr event = evt->GetEventData();
 
+    bool process_sum_ch = false;
+    if(_skip_channels.find(ChannelData::CH_SUM)==_skip_channels.end() &&
+       (ch_pulse_thresholds.find(ChannelData::CH_SUM)!= ch_pulse_thresholds.end() ||
+	ch_pulse_thresholds.find(ChannelData::CH_DEFAULT)!= ch_pulse_thresholds.end()))
+      process_sum_ch = true;
+    std::set<int> &channels_summed = event->channels_summed;
+
     //Loop over all channels and evaluate pulse edges individually
     for (size_t ch = 0; ch < event->channels.size(); ch++){
       
-      //note: if we search pulses with the sum channel, we need to skip
-      //the channels that are summed, then propagate pulses there
       ChannelData * chdata = &(event->channels[ch]);
       if(_skip_channels.find(chdata->channel_id) != _skip_channels.end()) continue;
       if(! (chdata->baseline.found_baseline) ||
 	 (int(chdata->subtracted_waveform.size()) != chdata->nsamps) ) continue;
-      
-      int result = FindChannelPulses(chdata);
-      //      if(result) return result; //we may not want to return if one channel fails
-      if(result) continue;
 
+      //find the spikes if the users specify a threshold
       //note: we will not search for spikes in the sum channel
       //only add up the spikes from summed channels
-      //spike class needs to specify which channel it comes from
+      int result = 0;
+      if(chdata->channel_id != ChannelData::CH_SUM) FindChannelSpikes(chdata);
 
+      //if we search pulses with the sum channel, we need to skip
+      //the channels that are summed, then propagate pulses there
+      if(process_sum_ch && channels_summed.find(chdata->channel_id)!=channels_summed.end())
+	continue;
+      
+      result = FindChannelPulses(chdata);
+      //      if(result) return result; //we may not want to return if one channel fails
+      //      if(result) continue;
     } //end loop over channels
+
+    //propagate sum channel pulses to the channels summed
+    if(channels_summed.size()>0){
+      //get the sum channel pulses
+      std::vector<Pulse> & sum_pulses = event->GetChannelByID(ChannelData::CH_SUM)->pulses;
+      if(sum_pulses.size()>0){
+
+	for(std::set<int>::iterator it=channels_summed.begin(); it!=channels_summed.end(); it++){
+	  //	for(size_t ch=0; ch<channels_summed.size(); ch++){
+	  ChannelData * chdata = event->GetChannelByID(*it);
+	  for(size_t jj=0; jj<sum_pulses.size(); jj++){
+	    Pulse pulse;
+	    pulse.start_index = sum_pulses.at(jj).start_index;
+	    pulse.end_index = sum_pulses.at(jj).end_index;
+	    chdata->pulses.push_back(pulse);
+	  }//end for jj
+	  chdata->npulses = chdata->pulses.size();
+	}//end for it
+      }//end if sum_pulses.size()
+    }//end if channels_summed.size()>0
     return 0;
 }
 
@@ -132,8 +166,10 @@ int PulseFinder::FindChannelPulses(ChannelData* chdata){
     else return 0; //we simply don't process this channel
   }//end else
   
+  //we don't trust the sum channel baseline sigma
   if(relative_bls_threshold){
-    if(chdata->baseline.sigma>0) threshold *= chdata->baseline.sigma;
+    if(chdata->channel_id!=ChannelData::CH_SUM && chdata->baseline.sigma>0) 
+      threshold *= chdata->baseline.sigma;
     else{
       Message(ERROR)<<"Channel "<<chdata->channel_id<< " has invalid baseline!\n";
       return 0;
@@ -143,7 +179,7 @@ int PulseFinder::FindChannelPulses(ChannelData* chdata){
   if(relative_spe_threshold){
     if(chdata->spe_mean>0){
       threshold *= chdata->spe_mean;
-      if(chdata->spe_mean==1){
+      if(chdata->channel_id!=ChannelData::CH_SUM && chdata->spe_mean==1){
 	Message(WARNING)<<"Channel "<<chdata->channel_id<< " uses spe_mean unspecified!\n";
       }//end if ==1
     }//end if >0
@@ -166,12 +202,24 @@ int PulseFinder::FindChannelPulses(ChannelData* chdata){
   }//end else
   int filter_nsamps = filter_time*chdata->sample_rate+1;
   const double * wave = chdata->GetBaselineSubtractedWaveform();
+  std::vector<double> summed;
   std::vector<double> smoothed;
   if(filter_nsamps>1){
-    smoothed.resize(chdata->nsamps);
-    //    bool is_good = SmoothWaveform(smoothed, chdata->nsamps, wave, filter_nsamps);
-    bool is_good = RunningSumWaveform(smoothed, chdata->nsamps, wave, filter_nsamps);
+    summed.resize(chdata->nsamps);
+    //    bool is_good = SmoothWaveform(summed, chdata->nsamps, wave, filter_nsamps);
+    bool is_good = RunningSumWaveform(summed, chdata->nsamps, wave, filter_nsamps);
     if(!is_good) return -1;
+    is_good = SmoothWaveform(smoothed, chdata->nsamps, &(summed[0]),filter_nsamps/4);
+    if(!is_good) return -1;
+
+    //let's save the sum waveform for checks
+    std::remove("event.txt");
+    std::ofstream ofs ("event.txt", std::ofstream::out);
+    for(size_t ab=0; ab<summed.size(); ab++)
+      ofs <<chdata->SampleToTime(ab)<<'\t'<<summed.at(ab)<<'\t'<<smoothed.at(ab)<<std::endl;
+    ofs.close();
+    
+    //    wave = &(summed[0]);
     wave = &(smoothed[0]);
   }
   
@@ -179,77 +227,37 @@ int PulseFinder::FindChannelPulses(ChannelData* chdata){
     DiscriminatorSearch(chdata, wave, start_index, end_index, threshold, 
 			pulse_start_add_nsamps, pulse_end_add_nsamps);
   if(search_result) return search_result;	
-
+  
   std::vector<int> start_index_split;
   std::vector<int> end_index_split;
   
   for(size_t index=0; index<start_index.size(); index++){
-//     std::cout<<chdata->channel_id<<'\t'<<index<<'\t'<<chdata->SampleToTime(start_index.at(index))
-// 	     <<'\t'<<chdata->SampleToTime(end_index.at(index))<<std::endl;
+    std::cout<<"Pulse to resolve pileup: "<<chdata->channel_id<<'\t'<<index<<'\t'<<chdata->SampleToTime(start_index.at(index))
+	      <<'\t'<<chdata->SampleToTime(end_index.at(index))<<std::endl;
     if(start_index.at(index)>=end_index.at(index)) continue;
     std::vector<int> start_index_tmp;
     std::vector<int> end_index_tmp;
     int split_result= ResolvePileUps(chdata, wave,start_index_tmp,end_index_tmp, threshold/2, 
-				     filter_nsamps, start_index.at(index),end_index.at(index));
+				     filter_nsamps/2, start_index.at(index),end_index.at(index));
     
-    if(split_result) continue;
-    //    std::cout<<"*** Great *** RelativeThresholdSearch succeeded! "<<std::endl;
+    if(split_result || start_index_tmp.size()==0) continue;
+    std::cout<<"*** Great *** resolving pileup succeeded! "<<std::endl;
     start_index_split.insert(start_index_split.end(), start_index_tmp.begin(), start_index_tmp.end());
     end_index_split.insert(end_index_split.end(), end_index_tmp.begin(), end_index_tmp.end());
 
   }//end for index  
   
-  //todo: we may want to move everything to a evaluatepulse module
-  int search_start_index=chdata->TimeToSample(search_start_time, true);
   chdata->pulses.reserve(start_index_split.size());
   for (size_t i = 0; i < start_index_split.size();  i++)
     {
+      std::cout<<chdata->channel_id<<'\t'<<i<<'\t'<<chdata->SampleToTime(start_index_split.at(i))
+	       <<'\t'<<chdata->SampleToTime(end_index_split.at(i))<<std::endl;
       if (start_index_split[i] >= end_index_split[i]) continue;
-
       Pulse pulse;
       pulse.start_index = start_index_split[i];
       pulse.end_index = end_index_split[i];
-      EvaluatePulse(pulse, chdata, -1);
-      //evaluate the pulse parameters depending on other pulses
-      if(chdata->pulses.size()){
-	pulse.time_since_last=pulse.half_max_time-chdata->pulses.back().end_time;
-	if(pulse.start_index<=chdata->pulses.back().end_index)
-	  {pulse.is_clean = false; chdata->pulses.back().is_clean = false;}
-      }
-      else{
-	pulse.time_since_last=pulse.half_max_time-chdata->SampleToTime(search_start_index);
-	if(pulse.start_index<=search_start_index) pulse.is_clean = false;
-      }
-      //  pulse.Print(chdata->channel_id, chdata->pulses.size());
       chdata->pulses.push_back(pulse);
-	    
     } // end for loop over pulses
-  /*
-  //get rid of noise pulses
-  //	double noise_start=0, noise_end=0;
-  for(size_t j=0; j<chdata->pulses.size(); j++){
-  Pulse &pulse = chdata->pulses.at(j);
-
-  if(pulse.integral+pulse.peak_amplitude>=0 ||
-  //	     pulse.overshoot>5*chdata->baseline.sigma ||
-  pulse.overshoot>0.5*pulse.peak_amplitude){
-  pulse.evaluated=false;
-  / *	    noise_start = pulse.start_time-0.2;
-  noise_end = pulse.end_time+0.2;
-  //get rid of the previous noise pulses
-  for(int k=j-1; k>=0; k--){
-  if(chdata->pulses.at(k).start_time>=noise_start &&
-  chdata->pulses.at(k).start_time<=noise_end) chdata->pulses.at(k).evaluated=false;
-  else break;
-  }* /
-  }//end if this is a bad pulse
-  / *	  if(noise_end>noise_start){//if this pulse comes close after a noise
-  if(chdata->pulses.at(j).start_time>=noise_start &&
-  chdata->pulses.at(j).start_time<=noise_end) chdata->pulses.at(j).evaluated=false;
-  else {noise_start=0; noise_end=0;}//out of noise window
-  }//end if noise end* /
-  }//end for loop
-  */
   chdata->npulses = chdata->pulses.size();
 
   return 0;
@@ -348,6 +356,8 @@ int PulseFinder::ResolvePileUps(ChannelData* chdata, const double * wave,
   if(start_index.size()) start_index.clear();
   if(end_index.size()) end_index.clear();
   
+  std::cout<<"Resolving overlaps for pulse: "<<chdata->SampleToTime(search_start)<<'\t'<<chdata->SampleToTime(search_end)<<std::endl;
+
   std::vector<int> turnpoints;
   std::vector<int> peak;
   turnpoints.reserve(100);  
@@ -361,6 +371,7 @@ int PulseFinder::ResolvePileUps(ChannelData* chdata, const double * wave,
 	(samp>=search_start+step && RelativeThresholdCrossed(wave[samp-step],wave[samp],threshold)) ) &&
        (RelativeThresholdCrossed(wave[samp+1],wave[samp],threshold) ||
 	(samp+step<=search_end && RelativeThresholdCrossed(wave[samp+step],wave[samp],threshold)) ) ){
+      std::cout<<"Possible peak at: "<<chdata->SampleToTime(samp)<<std::endl;
       //we need to make sure the first/last peak is complete
       if(peak.size()==0){
 	turnpoints.push_back(search_start);
@@ -380,6 +391,7 @@ int PulseFinder::ResolvePileUps(ChannelData* chdata, const double * wave,
 	     (samp>=search_start+step && RelativeThresholdCrossed(wave[samp],wave[samp-step],threshold)) ) &&
 	    (RelativeThresholdCrossed(wave[samp],wave[samp+1],threshold) ||
 	     (samp+step<=search_end && RelativeThresholdCrossed(wave[samp],wave[samp+step],threshold)) ) ){
+      std::cout<<"Possible valley at: "<<chdata->SampleToTime(samp)<<std::endl;
       //if there is another valley right before it but no peak in between
       if(peak.size()>0 && peak.back()==-1){ //there is a peak just before this one, and there was not a valley
 	if(FirstAmplitudeIsSmaller(wave[samp], wave[turnpoints.back()], threshold)) turnpoints.back()=samp;
@@ -400,7 +412,7 @@ int PulseFinder::ResolvePileUps(ChannelData* chdata, const double * wave,
   //check the peak array: -1 1 -1 1 ... 1 -1
   //  std::cout<<std::endl<<"Pulse finding before combining"<<std::endl;
   for(size_t ii=0; ii<peak.size(); ii++){
-    //    std::cout<<ii<<'\t'<<turnpoints.at(ii)<<'\t'<<peak.at(ii)<<std::endl;
+    std::cout<<ii<<'\t'<<chdata->SampleToTime(turnpoints.at(ii))<<'\t'<<peak.at(ii)<<std::endl;
     if((ii%2 && peak.at(ii)!=1) || (!(ii%2) && peak.at(ii)!=-1)) std::cout<<"Error in peak finding"<<std::endl;
   }
 
@@ -413,6 +425,12 @@ int PulseFinder::ResolvePileUps(ChannelData* chdata, const double * wave,
     if((ii+1)!=turnpoints.size()) start_index.push_back(turnpoints.at(ii));
     if(ii) end_index.push_back(turnpoints.at(ii));
   }
+
+  if(start_index.size()==0){
+    start_index.push_back(search_start);
+    end_index.push_back(search_end);
+  }
+
   if(start_index.size()==end_index.size()) return 0;
   else{
     if(start_index.size()) start_index.clear();
@@ -430,6 +448,7 @@ int PulseFinder::DiscriminatorSearch(ChannelData* chdata, const double * wave,
   if(!chdata || !wave || threshold==0 || pulse_start_add_nsamps<0 || pulse_end_add_nsamps<0)
     return -1;
 
+  std::cerr<<"Searching for pulses in channel: "<<chdata->channel_id<<std::endl;
   if(start_index.size()) start_index.clear();
   if(end_index.size()) end_index.clear();
   bool in_pulse = false;
@@ -445,12 +464,16 @@ int PulseFinder::DiscriminatorSearch(ChannelData* chdata, const double * wave,
 	in_pulse = true;
 	if(index>=search_start_index+pulse_start_add_nsamps) start_index.push_back(index-pulse_start_add_nsamps );
 	else start_index.push_back(search_start_index);
+	std::cerr<<"Find pulse start: "<<chdata->SampleToTime(index)<<'\t'
+		 <<chdata->SampleToTime(start_index.back())<<std::endl;
       }//end if just come to a pulse
       //if we are about to exit a pulse
       if(index==chdata->nsamps-1 || FirstAmplitudeIsSmaller(wave[index+1], threshold,threshold)){
 	if(in_pulse){
 	  if(index+pulse_end_add_nsamps<=search_end_index) end_index.push_back(index+pulse_end_add_nsamps);
 	  else end_index.push_back(search_end_index);
+	  std::cerr<<"Find pulse end: "<<chdata->SampleToTime(index)<<'\t'
+		   <<chdata->SampleToTime(end_index.back())<<std::endl;
 	}//end if in pulse
 	in_pulse = false;
       }//end if exit a pulse
@@ -467,20 +490,24 @@ int PulseFinder::DiscriminatorSearch(ChannelData* chdata, const double * wave,
   }
  
   //resoving overlapping pulses
-  for(size_t index=1; index<start_index.size(); index++){
-    // std::cout<<chdata->channel_id<<'\t'<<index<<'\t'<<chdata->SampleToTime(start_index.at(index))
-    // 	     <<'\t'<<chdata->SampleToTime(end_index.at(index))<<std::endl;
+  for(size_t index=0; index<start_index.size(); index++){
+    std::cout<<"Overlap? "<<chdata->channel_id<<'\t'<<index<<'\t'<<chdata->SampleToTime(start_index.at(index))
+     	     <<'\t'<<chdata->SampleToTime(end_index.at(index))<<std::endl;
+    if(index<1) continue;
     if(start_index.at(index)<=end_index.at(index-1)){
-      int middle_index = (start_index.at(index)+end_index.at(index-1))/2;
+      int middle_index = (start_index.at(index)+pulse_start_add_nsamps+end_index.at(index-1)-pulse_end_add_nsamps)/2;
       double min_value = wave[middle_index];
       //      for(int j=start_index.at(index); j<=end_index.at(index-1); j++){
+      std::cout<<"checking range: "<<chdata->SampleToTime(end_index.at(index-1)+1-pulse_end_add_nsamps)
+	       <<'\t'<<chdata->SampleToTime(start_index.at(index)+pulse_start_add_nsamps)<<std::endl;
       for(int j=end_index.at(index-1)+1-pulse_end_add_nsamps; j<start_index.at(index)+pulse_start_add_nsamps; j++){
 	if(j<0) continue;
 	else if(j>=chdata->nsamps) break;
-	if(FirstAmplitudeIsSmaller(min_value,wave[j], threshold)) continue;
+	if(FirstAmplitudeIsSmaller(min_value, wave[j], threshold)) continue;
         min_value = wave[j];
         middle_index = j;
       }//end for j loop
+      std::cout<<"found minimum: "<<chdata->SampleToTime(middle_index)<<std::endl;
       start_index.at(index) = middle_index;
       end_index.at(index-1) = middle_index;
     }//end if statement
