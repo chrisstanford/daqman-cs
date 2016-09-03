@@ -30,6 +30,16 @@ public:
   //  enum SEARCH_MODE { VARIANCE , DISCRIMINATOR , INTEGRAL , CURVATURE };
 
 private:
+
+  struct peak_t {
+    int startIndex;
+    int peakIndex;
+    int endIndex;
+    double leftH;
+    double rightH;
+    bool is_good;
+  };
+
   int FindChannelPulses(ChannelData* chdata);
   int FindChannelSpikes(ChannelData* chdata);
   /// Search for pulses using a simple discrimination threshold
@@ -41,6 +51,11 @@ private:
   /// only trust the result if  within a pulse/spike
   /// may pickup baseline fluctuations otherwise
   int ResolvePileUps(ChannelData* chdata, const double * wave,
+		      std::vector<int>& start_index, 
+		      std::vector<int>& end_index,
+		      double pileup_threshold, int step=3, 
+		      int search_start=0, int search_end=-1);
+  int ResolveSMPileUps(ChannelData* chdata, const double * wave,
 		      std::vector<int>& start_index, 
 		      std::vector<int>& end_index,
 		      double pileup_threshold, int step=3, 
