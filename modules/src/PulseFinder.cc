@@ -237,7 +237,7 @@ int PulseFinder::FindChannelPulses(ChannelData* chdata){
     if(start_index.at(index)>=end_index.at(index)) continue;
     std::vector<int> start_index_tmp;
     std::vector<int> end_index_tmp;
-    int split_result= ResolveSMPileUps(chdata, wave,start_index_tmp,end_index_tmp, threshold/2, 
+    int split_result= ResolveSMPileUps(chdata, wave,start_index_tmp,end_index_tmp, threshold, 
 				     filter_nsamps/2, start_index.at(index),end_index.at(index));
     
     if(split_result || start_index_tmp.size()==0) continue;
@@ -579,7 +579,7 @@ int PulseFinder::ResolveSMPileUps(ChannelData* chdata, const double * wave,
   if(end_index.size()) end_index.clear();
 
   //no point searching pileups if it is a small pulse
-  if(search_end-search_start<=1){
+  if(search_end-search_start<=step){
     start_index.push_back(search_start);
     end_index.push_back(search_end);
     return 0;
@@ -588,7 +588,7 @@ int PulseFinder::ResolveSMPileUps(ChannelData* chdata, const double * wave,
   std::cout<<"Resolving overlaps for pulse: "<<chdata->SampleToTime(search_start)<<'\t'<<chdata->SampleToTime(search_end)<<std::endl;
 
   std::vector<peak_t> peaks;
-  peak.reserve(10);  
+  peaks.reserve(10);  
   const int nstep=6;
   int steps[nstep] = {-step, step*2/(-3), step/(-3), step/3, step*2/3, step};
 
@@ -596,14 +596,19 @@ int PulseFinder::ResolveSMPileUps(ChannelData* chdata, const double * wave,
     //here we come to a possible local peak -- not smaller than local neighbours
     if(!FirstAmplitudeIsSmaller(wave[samp],wave[samp-1],threshold) &&
        !FirstAmplitudeIsSmaller(wave[samp],wave[samp+1],threshold) ){
-      bool is_real_peak = true;
+      bool is_real_peak = true, good_on_left=false, good_on_right=false;
       for(int ii=0; ii<nstep; ii++){
-	if(samp+steps[ii]>=0 && samp+steps[ii]<=search_end && 
-	   FirstAmplitudeIsSmaller(wave[samp],wave[samp+steps[ii]],threshold))
-	  is_real_peak = false;
+	if(samp+steps[ii]>=0 && samp+steps[ii]<=search_end){
+	  if(FirstAmplitudeIsSmaller(wave[samp],wave[samp+steps[ii]],threshold))
+	    is_real_peak = false;
+	  else if(FirstAmplitudeIsSmaller(wave[samp+steps[ii]],wave[samp],threshold)){
+	    if(ii<nstep/2) good_on_left=true;
+	    else good_on_right=true;
+	  }
+	}//end if within reange
       }//end for ii
-      if(is_real_peak){
-	std::cout<<"Possible peak at: "<<chdata->SampleToTime(samp)<<std::endl;
+      if(is_real_peak && good_on_left && good_on_right){
+	//	std::cout<<"Possible peak at: "<<chdata->SampleToTime(samp)<<std::endl;
 	if(peaks.size() && peaks.back().endIndex==-1){//if there is a peak not close
 	  if(FirstAmplitudeIsSmaller(wave[peaks.back().peakIndex], wave[samp], threshold))
 	    peaks.back().peakIndex=samp;
@@ -614,7 +619,6 @@ int PulseFinder::ResolveSMPileUps(ChannelData* chdata, const double * wave,
 	  else apeak.startIndex=search_start;
 	  apeak.peakIndex=samp;
 	  apeak.endIndex=-1;
-	  apeak.is_good=true;
 	  peaks.push_back(apeak);
 	}//end else
       }//end if is_real_peak
@@ -622,14 +626,19 @@ int PulseFinder::ResolveSMPileUps(ChannelData* chdata, const double * wave,
     //don't put else here, here we come to a possible local valley
     if(!FirstAmplitudeIsSmaller(wave[samp-1],wave[samp],threshold) &&
        !FirstAmplitudeIsSmaller(wave[samp+1],wave[samp],threshold) ){
-      bool is_real_valley = true;
+      bool is_real_valley = true, good_on_left=false, good_on_right=false;
       for(int ii=0; ii<nstep; ii++){
-	if(samp+steps[ii]>=0 && samp+steps[ii]<=search_end && 
-	   FirstAmplitudeIsSmaller(wave[samp+steps[ii]],wave[samp],threshold))
-	  is_real_valley = false;
+	if(samp+steps[ii]>=0 && samp+steps[ii]<=search_end){ 
+	  if(FirstAmplitudeIsSmaller(wave[samp+steps[ii]],wave[samp],threshold))
+	    is_real_valley = false;
+	  else if(FirstAmplitudeIsSmaller(wave[samp],wave[samp+steps[ii]],threshold)){
+            if(ii<nstep/2) good_on_left=true;
+            else good_on_right=true;
+          }
+	}//end if within range
       }//end for ii
-      if(is_real_valley){
-	std::cout<<"Possible valley at: "<<chdata->SampleToTime(samp)<<std::endl;
+      if(is_real_valley && good_on_left && good_on_right){
+	//	std::cout<<"Possible valley at: "<<chdata->SampleToTime(samp)<<std::endl;
 	if(peaks.size() && 
 	   (peaks.back().endIndex==-1 ||
 	    FirstAmplitudeIsSmaller(wave[samp], wave[peaks.back().endIndex], threshold)) )
@@ -638,26 +647,30 @@ int PulseFinder::ResolveSMPileUps(ChannelData* chdata, const double * wave,
     }//end if a local valley
   }//end for loop
 
+  std::cout<<"Beyond first for loop to look for pulses"<<std::endl;
   //we need to make sure the first/last peak is complete
-  if(peaks.back().endIndex==-1) peaks.back().endIndex=search_end;
+  if(peaks.size() && peaks.back().endIndex==-1) peaks.back().endIndex=search_end;
  
-  //lets find which pulses cross the threshold
+  //only keep pulses cross the threshold
   int peaks_merged = 0;
   do{
     peaks_merged = 0;
     for(size_t jj=0; jj<peaks.size(); jj++){
-      peaks.at(jj).leftH  = wave[peaks.at(jj).peakIndex]-wave[peaks.at(jj).startIndex];
-      peaks.at(jj).rightH = wave[peaks.at(jj).peakIndex]-wave[peaks.at(jj).endIndex];
+      if(peaks.at(jj).startIndex<0 || peaks.at(jj).peakIndex<0 || peaks.at(jj).endIndex<0){
+	std::cout<<"*** Error *** Peak finder failed "<<std::endl;
+	continue;
+      }
       //this peak doesn't cross the threshold
       if(!(RelativeThresholdCrossed(wave[peaks.at(jj).startIndex],wave[peaks.at(jj).peakIndex],threshold)) ||
 	 !(RelativeThresholdCrossed(wave[peaks.at(jj).endIndex],wave[peaks.at(jj).peakIndex],threshold))){
+	//	std::cout<<"*** Warning *** Peak too small "<<std::endl;
 	bool merge_left=false, merge_right=false;
 	//merge left in this case
-	if(jj>0 && FirstAmplitudeIsSmaller(peaks.at(jj).leftH,peaks.at(jj).rightH, threshold)){
+	if(jj>0 && (FirstAmplitudeIsSmaller(wave[peaks.at(jj).endIndex],wave[peaks.at(jj).startIndex], threshold) ||
+		    jj+1 == peaks.size())){
 	  peaks.at(jj-1).endIndex=peaks.at(jj).endIndex;
 	  if(FirstAmplitudeIsSmaller(wave[peaks.at(jj-1).peakIndex],wave[peaks.at(jj).peakIndex],threshold))
 	    peaks.at(jj-1).peakIndex = peaks.at(jj).peakIndex;
-	  peaks.erase(peaks.begin()+jj);
 	  merge_left = true;
 	}//end if merge left
 	//merge right in this case
@@ -665,20 +678,24 @@ int PulseFinder::ResolveSMPileUps(ChannelData* chdata, const double * wave,
 	  peaks.at(jj+1).startIndex=peaks.at(jj).startIndex;
 	  if(FirstAmplitudeIsSmaller(wave[peaks.at(jj+1).peakIndex],wave[peaks.at(jj).peakIndex],threshold))
 	    peaks.at(jj+1).peakIndex = peaks.at(jj).peakIndex;
-	  peaks.erase(peaks.begin()+jj);
 	  merge_right = true;
 	}//end if merge right
 	if(merge_left || merge_right){
+// 	  std::cout<<"Peak merged "<<chdata->SampleToTime(peaks.at(jj).startIndex)<<", "
+// 		   << chdata->SampleToTime(peaks.at(jj).endIndex)<<" to the left? "<<merge_left<<std::endl;
 	  peaks_merged ++;
+	  peaks.erase(peaks.begin()+jj);
 	  jj--;//this should be okay for size_t 0
 	}
       }//end if peak is too small
     }//end for jj loop
   }while(peaks_merged>0);
 
+  std::cout<<"Beyond first for loop to merge pulses"<<std::endl;
+
   for(size_t ii=0; ii<peaks.size(); ii++){
     start_index.push_back(peaks.at(ii).startIndex);
-    end_index.push_back(peaks.at(ii.endIndex));
+    end_index.push_back(peaks.at(ii).endIndex);
   }
 
   if(start_index.size()==0){

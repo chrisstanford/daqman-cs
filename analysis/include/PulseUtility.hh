@@ -17,7 +17,7 @@
 //determine if x1->x2 cross the relative threshold, either positive or negative
 bool RelativeThresholdCrossed(double x1, double x2, double threshold);
 //determine either x1 or x2 has smaller amplitude in the direction given by sign
-bool FirstAmplitudeIsSmaller(double x1, double x2, double dumb_sign=1);
+bool FirstAmplitudeIsSmaller(double x1, double x2, double dumb_sign=1, double precision=1e-4);
 //calculate the gaussian function value for convolutions, etc.
 double gaussian(double x, double mean, double sigma);
 //smooth a waveform with a Gaussian function

@@ -35,9 +35,6 @@ private:
     int startIndex;
     int peakIndex;
     int endIndex;
-    double leftH;
-    double rightH;
-    bool is_good;
   };
 
   int FindChannelPulses(ChannelData* chdata);

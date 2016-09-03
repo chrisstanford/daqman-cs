@@ -18,9 +18,9 @@ bool RelativeThresholdCrossed(double x1, double x2, double threshold){
 }
 
 //determine either x1 or x2 has smaller amplitude in the direction given by sign
-bool FirstAmplitudeIsSmaller(double x1, double x2, double dumb_sign){
-  if(dumb_sign>0) return (x1<x2);
-  else if(dumb_sign<0) return (x1>x2);
+bool FirstAmplitudeIsSmaller(double x1, double x2, double dumb_sign, double precision){
+  if(dumb_sign>0) return (x2-x1>precision);
+  else if(dumb_sign<0) return (x1-x2>precision);
   else {
     std::cerr<<"*** Error *** Comparing amplitudes without a given sign *** Error ***"<<std::endl;
     return false;
