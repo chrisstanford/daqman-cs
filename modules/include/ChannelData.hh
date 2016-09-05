@@ -18,6 +18,7 @@
 #include "Pulse.hh"
 #include "Baseline.hh"
 #include "Spe.hh"
+#include "Spike.hh"
 
 class TGraph;
 //notice: members with comment starting with ! are not saved
@@ -100,10 +101,11 @@ public:
   std::vector<double> subtracted_waveform; //!< Channel waveform after baseline subtraction
   //individual pulses
   int npulses; ///< number of pulses found
-  std::vector<Pulse> pulses;  //!< vector of individual pulses found 
+  std::vector<Pulse> pulses;  ///< vector of individual pulses found 
   std::vector<Pulse> regions; ///< vector of ROIs for simple analysis
   std::vector<Pulse> tof;     ///< vector of Time of flight
   std::vector<Spe> single_pe; ///< vector of single photoelectron responses
+  std::vector<Spike> spikes;  //!< vector of spikes found in this channel
 
   //integrator
   std::vector<double> integral; //!< Integral of the channel's waveform

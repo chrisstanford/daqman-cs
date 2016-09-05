@@ -41,22 +41,15 @@ private:
   int FindChannelSpikes(ChannelData* chdata);
   /// Search for pulses using a simple discrimination threshold
   int DiscriminatorSearch(ChannelData* chdata, const double * wave,
-			  std::vector<int>& start_index, 
-			  std::vector<int>& end_index, double threshold,
+			  std::vector<peak_t>& peaks, double threshold,
 			  int pulse_start_add_nsamps, int pulse_end_add_nsamps);
-  /// resolve pileup pulses/spikes
-  /// only trust the result if  within a pulse/spike
+  /// resolve pileup pulses/spikes, only trust the result if  within a pulse/spike
   /// may pickup baseline fluctuations otherwise
-  int ResolvePileUps(ChannelData* chdata, const double * wave,
-		      std::vector<int>& start_index, 
-		      std::vector<int>& end_index,
-		      double pileup_threshold, int step=3, 
-		      int search_start=0, int search_end=-1);
-  int ResolveSMPileUps(ChannelData* chdata, const double * wave,
-		      std::vector<int>& start_index, 
-		      std::vector<int>& end_index,
-		      double pileup_threshold, int step=3, 
-		      int search_start=0, int search_end=-1);
+  int PileUpSpikes(ChannelData* chdata, const double * wave,
+		   std::vector<peak_t>& peaks, peak_t range, double threshold);
+  int PileUpPulses(ChannelData* chdata, const double * wave,
+		   std::vector<peak_t>& peaks, peak_t range, 
+		   double threshold, int step=3);
   ///parameters
   //  SEARCH_MODE mode;                ///< Which search function to use
   double search_start_time;                  ///< Time in us to start search

@@ -181,6 +181,18 @@ void ChannelData::Draw(bool baseline_subtracted, int downsample,
     spebox->SetLineColor(kRed);
     spebox->Draw();
   }
+
+  //Draw boxes around the spikes
+  for(size_t i = 0; i<spikes.size(); i++){
+    const Spike& spike = spikes[i];
+    TBox* spikebox = 
+      new TBox(spike.start_time, baseline.mean,
+	       spike.start_time + spike.width,
+	       baseline.mean - spike.peak_amplitude);
+    spikebox->SetBit(TObject::kCanDelete, true);
+    spikebox->SetLineColor(kViolet);
+    spikebox->Draw();
+  }
   
   //mark the integral max and min;
   if(draw_integral){
