@@ -92,14 +92,9 @@ bool SmoothWaveform(std::vector<double> &smoothed, int nsamps, const double *wav
 bool RunningSumFromIntegral(std::vector<double> &summed, int nsamps, const double *integral,  int sigma){
   if(nsamps<1 || sigma <=1) return false;
   summed.resize(nsamps);
-  sigma = sigma/2+1;
-  int start, end;
   for(int ii=0; ii<nsamps; ii++){
-    start = ii-sigma;
-    end = ii+sigma;
-    if(start<0) start=0;
-    if(end>=nsamps) end=nsamps-1;
-    summed.at(ii)=integral[end]-integral[start];
+    if(ii<sigma) summed.at(ii)=integral[ii];
+    else summed.at(ii)=integral[ii]-integral[ii-sigma];
   }
   return true;
 }

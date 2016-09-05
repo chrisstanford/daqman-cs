@@ -15,5 +15,12 @@ bool SmoothWaveform(std::vector<double> &smoothed, int nsamps, const double *wav
 bool RunningSumWaveform(std::vector<double> &summed, int nsamps, const double *wave,  int sigma);
 //calculate the running sum waveform from waveform integral
 bool RunningSumFromIntegral(std::vector<double> &summed, int nsamps, const double *integral, int sigma);
+//add offset to a variable with upper and lower bounds
+template <typename T> 
+inline void AddOffsetWithBounds(T &val, T offset, T lower, T upper){
+  val += offset;
+  if(val>upper) val=upper;
+  if(val<lower) val=lower;
+}
 
 #endif

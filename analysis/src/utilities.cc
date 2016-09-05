@@ -355,7 +355,7 @@ void FitChannelSPE(int ch_id, double fit_min, double fit_max,
     }
     for(size_t spe_id=0; spe_id<ch_signal->single_pe.size(); spe_id++){
       if(ch_signal->single_pe.at(spe_id).baseline_sigma>max_baseline_sigma ||
-	 ch_signal->single_pe.at(spe_id).amplitude<min_spe_amp) continue;
+	 ch_signal->single_pe.at(spe_id).peak_amplitude<min_spe_amp) continue;
       hspe->Fill(-ch_signal->single_pe.at(spe_id).integral);
     }
   }//end for loop

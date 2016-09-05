@@ -17,30 +17,28 @@
 class Spe
 {
 public:
-  Spe()
-  {
+  Spe(){
     Clear();
   }
-  virtual ~Spe() {}
-  void Clear()
-  {
+  virtual ~Spe() {;}
+  void Clear(){
     integral = -1;
     start_time = -1;
     width = -1;
     peak_time=-1;
-    amplitude=-1;
+    peak_amplitude=-1;
     baseline_mean = -1;
     baseline_sigma = -1;
   }
   
-  double integral;       ///< Integral in counts*samples of the found charge
   double start_time;     ///< time of the start of the pulse
-  int    width;          ///< with of the spe pulse including the edge samples
   double peak_time;      ///< time at which the pulse reached max amplitude
-  double amplitude;      ///< Maximum height of the spe pulse
+  double width;          ///< with of the spe pulse including the edge samples
+  double peak_amplitude; ///< Maximum height of the spe pulse
+  double integral;       ///< Integral in counts*samples of the found charge
   double baseline_mean;  ///< value of the local baseline mean
   double baseline_sigma; ///< value of the local baseline standard deviation
-  ClassDef(Spe,3)
+  ClassDef(Spe,4)
 };
   
 #endif
