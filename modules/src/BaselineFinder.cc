@@ -338,8 +338,9 @@ int BaselineFinder::FlatBaseline(ChannelData* chdata){
   if(nsamps<1) return -1;
 
   //find the maximum sample value within the pre_trigger area
-  int pulse_start_index = chdata->TimeToSample(baseline_end_time) - 1;
-  if(pulse_start_index<1 || pulse_start_index>=nsamps-1) return -1;
+  int pulse_start_index = chdata->TimeToSample(baseline_end_time, true) - 1;
+  //  if(pulse_start_index<1 || pulse_start_index>=nsamps-1) return -1;
+  if(pulse_start_index<1) return -1;
   double max_pre_trig = *std::max_element(wave,wave+pulse_start_index);
   double min_pre_trig = *std::min_element(wave,wave+pulse_start_index);
   if(std::fabs(chdata->GetVerticalRange()-max_pre_trig )<1 || min_pre_trig<1)
@@ -356,9 +357,8 @@ int BaselineFinder::FlatBaseline(ChannelData* chdata){
   if(min_bl<1) min_bl=1;//can not be 0 to avoid saturation pulses
   if(max_bl-min_bl<1) return -1;
   std::vector<int> stats (max_bl-min_bl+1, 0);
-  pulse_start_index = nsamps;
+  //  pulse_start_index = nsamps;
   for(int samp=0; samp<pulse_start_index; samp++){
-    //  for(int samp=0; samp<nsamps; samp++){
     if(wave[samp]<min_bl || wave[samp]>max_bl) continue;
     stats.at(wave[samp]-min_bl) ++;
   }

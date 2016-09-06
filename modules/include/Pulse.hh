@@ -29,15 +29,16 @@ public:
   int end_index;         ///< index for the end of the pulse
   double start_time;     ///< time since trigger at start of pulse
   double peak_time;      ///< time since trigger at pulse peak;
+  //  double peak_time_raw;  ///< raw peak time from pulse finder
   double end_time;       ///< time since trigger at end of pulse
   double half_max_time;  ///< time when pulse rise to 50% of peak
   double max;            ///< Maximum value obtained over the region
   double min;            ///< Minimum value obtained over the region
-  double overshoot; ///< overshoot of the peak
+  double overshoot;      ///< overshoot of the peak
   double peak_amplitude; ///< amplitude of the peak
-  double tail_peak;      ///< peak amplitude of the pulse tail
   double integral;       ///< integral of the peak
   double npe;            ///< integral scaled for single pe amplitude
+  int nspikes;           ///< number of spikes in this channel
   double time_since_last; ///< time from the end of the last pulse
   std::vector<double> fparameters; ///< fparameters for given prompt time
   std::vector<double> tparameters; ///< time for integral to reach certain fractions
@@ -48,7 +49,7 @@ public:
   bool is_clean;   ///< clean = this pulse is not back to back with another, not cut off by the end of the scan, not an s2 trigger 
   bool evaluated;  ///< if this pulse has been evaluated
   
-  ClassDef(Pulse,11);
+  ClassDef(Pulse,12);
 };
 
 inline void Pulse::Clear()
@@ -59,14 +60,15 @@ inline void Pulse::Clear()
   start_time = 0;
   half_max_time = -10000;
   peak_time = 0;
+  //  peak_time_raw = 0;
   end_time = 0;
   max = -1;
   min = -1;
   overshoot = -1;
   peak_amplitude = -1;
-  tail_peak = -1;
   integral=0;
   npe=0;
+  nspikes=0;
   time_since_last = 0;
   if(fparameters.size()) fparameters.clear();
   if(tparameters.size()) tparameters.clear();
@@ -91,14 +93,15 @@ inline void Pulse::Print(int channel, int pulse)
     m<<"Start Time: "<<start_time<<std::endl;
     m<<"Half Maximum Time: "<<half_max_time<<std::endl;
     m<<"Peak Time: "<<peak_time<<std::endl;
+    //    m<<"Raw Peak Time: "<<peak_time_raw<<std::endl;
     m<<"End Time: "<<end_time<<std::endl;
     m<<"Maximum Value: "<<max<<std::endl;
     m<<"Minimum Value: "<<min<<std::endl;
     m<<"Overshoot Value: "<<overshoot<<std::endl;
     m<<"Peak Amplitude: "<<peak_amplitude<<std::endl;
-    m<<"Tail Peak Amplitude: "<<tail_peak<<std::endl;
     m<<"Integral: "<<integral<<std::endl;
     m<<"Npe: "<<npe<<std::endl;
+    m<<"NSpikes: "<<nspikes<<std::endl;
     m<<"Time since last pulse: "<<time_since_last<<std::endl;
     m<<"Size of fparameters: "<<fparameters.size()<<std::endl;
     m<<"Size of tparameters: "<<tparameters.size()<<std::endl;

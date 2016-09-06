@@ -261,7 +261,7 @@ void PSD::ProcessPulse(ChannelData *chdata, Pulse & pulse){
     //warning this is to test the noise rejection algorithm
     // pulse.test = *std::max_element(subtracted + pulse.start_index, 
     // 				 subtracted + max_peak_index);
-    pulse.tail_peak = -wave[peak_index]; //pulse are neg, amplitude pos
+//    pulse.tail_peak = -wave[peak_index]; //pulse are neg, amplitude pos
   }
   */
   //calculate the gatti parameters

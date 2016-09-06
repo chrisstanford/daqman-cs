@@ -223,11 +223,11 @@ int TOF::ProcessDataChannel(ChannelData* chdata){
     // }//end if integral
 
     //this is to apply time cuts to reject noise events
-    if(!(chdata->integral.empty())){
-      int tail_start = chdata->nsamps - 3.*chdata->sample_rate;
-      pulse.tail_peak = chdata->integral[tail_start]-chdata->integral[chdata->nsamps-1];
-    }
-    else pulse.tail_peak = -1;
+//     if(!(chdata->integral.empty())){
+//       int tail_start = chdata->nsamps - 3.*chdata->sample_rate;
+//       pulse.tail_peak = chdata->integral[tail_start]-chdata->integral[chdata->nsamps-1];
+//     }
+//     else pulse.tail_peak = -1;
 
     chdata->tof.push_back(pulse);
     //    pulse.Print(chdata->channel_id, -1);

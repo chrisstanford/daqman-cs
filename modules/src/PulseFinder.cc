@@ -108,7 +108,6 @@ int PulseFinder::Process(EventPtr evt){
     //get the sum channel pulses
     std::vector<Pulse> & sum_pulses = event->GetChannelByID(ChannelData::CH_SUM)->pulses;
     if(sum_pulses.size()>0){
-
       for(std::set<int>::iterator it=channels_summed.begin(); it!=channels_summed.end(); it++){
 	ChannelData * chdata = event->GetChannelByID(*it);
 	for(size_t jj=0; jj<sum_pulses.size(); jj++){
@@ -190,12 +189,17 @@ int PulseFinder::FindChannelPulses(ChannelData* chdata){
     wave = &(smoothed[0]);
 
     //let's save the sum waveform for checks
-    std::remove("event.txt");
-    std::ofstream ofs ("event.txt", std::ofstream::out);
-    for(size_t ab=0; ab<summed.size(); ab++)
-      ofs <<chdata->SampleToTime(ab)<<'\t'<<summed.at(ab)<<'\t'<<smoothed.at(ab)<<std::endl;
-    ofs.close();
-  }
+    if(MessageHandler::GetInstance()->GetDefaultMessageThreshold()<INFO){
+      //      std::cout<<"DefaultMessageThreshold: "<<MessageHandler::GetInstance()->GetDefaultMessageThreshold()<<std::endl;
+      char wfm_fname[64];
+      sprintf(wfm_fname, "waveform_ch%s.txt",chdata->label.c_str());
+      std::remove(wfm_fname);
+      std::ofstream ofs (wfm_fname, std::ofstream::out);
+      for(size_t ab=0; ab<summed.size(); ab++)
+	ofs <<chdata->SampleToTime(ab)<<'\t'<<summed.at(ab)<<'\t'<<smoothed.at(ab)<<std::endl;
+      ofs.close();
+    }//end if messagehandler
+  }//end if filter nsamps>1
   
   //here we do a simple threshold discriminator search
   //find pulses that cross the absolute threshold
@@ -230,11 +234,12 @@ int PulseFinder::FindChannelPulses(ChannelData* chdata){
     //     std::cout<<chdata->channel_id<<'\t'<<i<<'\t'<<chdata->SampleToTime(peaks_split.at(i).startIndex)
     // 	     <<'\t'<<chdata->SampleToTime(peaks_split.at(i).endIndex)<<std::endl;
     AddOffsetWithBounds<int>(peaks_split.at(i).startIndex, offset_nsamps, 0, chdata->nsamps-1);
-    AddOffsetWithBounds<int>(peaks_split.at(i).peakIndex, offset_nsamps, 0, chdata->nsamps-1);
+    //    AddOffsetWithBounds<int>(peaks_split.at(i).peakIndex, offset_nsamps*2, 0, chdata->nsamps-1);
     AddOffsetWithBounds<int>(peaks_split.at(i).endIndex, offset_nsamps, 0, chdata->nsamps-1);
 
     Pulse pulse;
     pulse.start_index = peaks_split.at(i).startIndex;
+    //    pulse.peak_index = peaks_split.at(i).peakIndex;
     pulse.end_index = peaks_split.at(i).endIndex;
     chdata->pulses.push_back(pulse);
   } // end for loop over pulses
@@ -341,7 +346,7 @@ int PulseFinder::DiscriminatorSearch(ChannelData* chdata, const double * wave,
 	apeak.peakIndex = index;
 	apeak.endIndex = -1;
 	peaks.push_back(apeak);
-	std::cerr<<"Find pulse start: "<<chdata->SampleToTime(index)<<std::endl;
+	//	std::cerr<<"Find pulse start: "<<chdata->SampleToTime(index)<<std::endl;
 	//Do NOT put continue here because this could also be the existing sample 
       }//end if just come to a pulse
       if(peaks.size() && peaks.back().endIndex==-1){
@@ -350,7 +355,7 @@ int PulseFinder::DiscriminatorSearch(ChannelData* chdata, const double * wave,
 	//if we are about to exit a pulse
 	if(index==chdata->nsamps-1 || !FirstAmplitudeIsSmaller(threshold,wave[index+1], threshold)){
 	  peaks.back().endIndex=index;
-	  std::cerr<<"Find pulse end: "<<chdata->SampleToTime(index)<<std::endl;
+	  //	  std::cerr<<"Find pulse end: "<<chdata->SampleToTime(index)<<std::endl;
 	}//end if exit a pulse
       }//end if there is an open pulse
     }//end if inside a pulse
@@ -541,7 +546,7 @@ int PulseFinder::PileUpPulses(ChannelData* chdata, const double * wave,
       //this peak doesn't cross the threshold
       if(!(RelativeThresholdCrossed(wave[peaks.at(jj).startIndex],wave[peaks.at(jj).peakIndex],threshold)) ||
 	 !(RelativeThresholdCrossed(wave[peaks.at(jj).endIndex],wave[peaks.at(jj).peakIndex],threshold))){
-	Message(INFO)<<"Small pulse in channel "<<chdata->channel_id<<" will be merged: "
+	Message(DEBUG)<<"Small pulse in channel "<<chdata->channel_id<<" will be merged: "
 		     <<chdata->SampleToTime(peaks.at(jj).startIndex)<<", "
 		     <<chdata->SampleToTime(peaks.at(jj).endIndex)<<". \n";
 	bool merge_left=false, merge_right=false;
