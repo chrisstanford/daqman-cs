@@ -12,6 +12,18 @@
 #include <vector>
 #include <iostream>
 
+class XYZ{
+public:
+  XYZ(){Clear();};
+  virtual ~XYZ(){;}
+  void Clear(){x=0; y=0; z=0;}
+  //  void Print(){std::cout<<"Position: "<<x<<'\t'<<y<<'\t'<<z<<std::endl;}
+  double x;
+  double y;
+  double z;
+  ClassDef(XYZ,1);
+};
+
 /** @class Pulse
     @brief Stores information relevant to a single scintillation event
     @ingroup modules
@@ -48,6 +60,12 @@ public:
   bool saturated;  ///< was the peak saturated?
   bool is_clean;   ///< clean = this pulse is not back to back with another, not cut off by the end of the scan, not an s2 trigger 
   bool evaluated;  ///< if this pulse has been evaluated
+
+  //positions
+  XYZ pos_com_integral;   ///< center of mass calculated with pulse integral
+  XYZ pos_com_spikes;     ///< center of mass calculated with spike counting
+  XYZ pos_lnr_integral;   ///< left/right, near/far, top/bottom ratio calculated with pulse integral
+  XYZ pos_lnr_spikes;     ///< left/right, near/far, top/bottom ratio calculated with spike counting
   
   ClassDef(Pulse,12);
 };

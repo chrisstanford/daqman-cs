@@ -175,7 +175,7 @@ void ChannelData::Draw(bool baseline_subtracted, int downsample,
     const Spe& spe = single_pe[i];
     TBox* spebox = 
       new TBox(spe.start_time, spe.baseline_mean,
-	       spe.start_time + spe.width/sample_rate, 
+	       spe.start_time + spe.width, 
 	       spe.baseline_mean - spe.peak_amplitude);
     spebox->SetBit(TObject::kCanDelete, true);
     spebox->SetLineColor(kRed);

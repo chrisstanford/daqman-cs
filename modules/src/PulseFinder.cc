@@ -59,7 +59,8 @@ int PulseFinder::Initialize(){
       return 1;
     }//end if
   }//end for
-
+  //we don't need this parameter to be user-specified
+  spike_edge_add_nsamps=5;
   return 0;
 }
 
@@ -192,7 +193,7 @@ int PulseFinder::FindChannelPulses(ChannelData* chdata){
     if(MessageHandler::GetInstance()->GetDefaultMessageThreshold()<INFO){
       //      std::cout<<"DefaultMessageThreshold: "<<MessageHandler::GetInstance()->GetDefaultMessageThreshold()<<std::endl;
       char wfm_fname[64];
-      sprintf(wfm_fname, "waveform_ch%s.txt",chdata->label.c_str());
+      sprintf(wfm_fname, "waveform_%s.txt",chdata->label.c_str());
       std::remove(wfm_fname);
       std::ofstream ofs (wfm_fname, std::ofstream::out);
       for(size_t ab=0; ab<summed.size(); ab++)
@@ -289,10 +290,9 @@ int PulseFinder::FindChannelSpikes(ChannelData* chdata){
   }//end relative spe
 
   std::vector<peak_t> peaks;
-  const int spike_edge = 5;
   const double * wave = chdata->GetBaselineSubtractedWaveform();
   int search_result = DiscriminatorSearch(chdata, wave, peaks, threshold,
-					  spike_edge, spike_edge);
+					  spike_edge_add_nsamps, spike_edge_add_nsamps);
   if(search_result) return search_result;	
 
   //now let's split the spikes that don't cross the absolute threshold
@@ -330,6 +330,10 @@ int PulseFinder::DiscriminatorSearch(ChannelData* chdata, const double * wave,
   
   if(!chdata || !wave || threshold==0 || pulse_start_add_nsamps<0 || pulse_end_add_nsamps<0)
     return -1;
+
+  bool spike_finding=true;
+  if(pulse_start_add_nsamps>spike_edge_add_nsamps || 
+     pulse_end_add_nsamps>spike_edge_add_nsamps) spike_finding=false;
   
   //  std::cerr<<"Searching for pulses in channel: "<<chdata->channel_id<<std::endl;
   if(peaks.size()) peaks.clear();
@@ -392,24 +396,28 @@ int PulseFinder::DiscriminatorSearch(ChannelData* chdata, const double * wave,
     }
     //if we get to here we have a possible overlap
     //leave it to the pileup function to resolve it
-    peaks.at(index-1).endIndex=peaks.at(index).endIndex;
-    if(FirstAmplitudeIsSmaller(wave[peaks.at(index-1).peakIndex],wave[peaks.at(index).peakIndex],threshold))
-      peaks.at(index-1).peakIndex=peaks.at(index).peakIndex;
-    peaks.erase(peaks.begin()+index);
-    index--;
-    continue;
+    if(!spike_finding){
+      peaks.at(index-1).endIndex=peaks.at(index).endIndex;
+      if(FirstAmplitudeIsSmaller(wave[peaks.at(index-1).peakIndex],wave[peaks.at(index).peakIndex],threshold))
+	peaks.at(index-1).peakIndex=peaks.at(index).peakIndex;
+      peaks.erase(peaks.begin()+index);
+      index--;
+      continue;
+    }
+    else{//resolve it for spike counting
+      int middle_index = peaks.at(index).startIndex;
+      double min_value = wave[middle_index];
+      for(int j=peaks.at(index-1).endIndex; j<peaks.at(index).startIndex; j++){
+	if(FirstAmplitudeIsSmaller(wave[j], min_value, threshold)){
+	  min_value = wave[j];
+	  middle_index = j;
+	}//end if
+      }//end for j loop
+      //      std::cout<<"found minimum: "<<chdata->SampleToTime(middle_index)<<std::endl;
+      peaks.at(index).startIndex = middle_index;
+      peaks.at(index-1).endIndex = middle_index;
+    }//end else
 
-//     int middle_index = peaks.at(index).startIndex;
-//     double min_value = wave[middle_index];
-//     for(int j=peaks.at(index-1).endIndex; j<peaks.at(index).startIndex; j++){
-//       if(FirstAmplitudeIsSmaller(wave[j], min_value, threshold)){
-// 	min_value = wave[j];
-// 	middle_index = j;
-//       }//end if
-//     }//end for j loop
-//     //      std::cout<<"found minimum: "<<chdata->SampleToTime(middle_index)<<std::endl;
-//     peaks.at(index).startIndex = middle_index;
-//     peaks.at(index-1).endIndex = middle_index;
   }//end for index loop
 
   return 0;
@@ -591,7 +599,7 @@ int PulseFinder::PileUpSpikes(ChannelData* chdata, const double * wave,
      range.endIndex>=chdata->nsamps || range.startIndex>=range.endIndex) return -1;
   if(peaks.size()) peaks.clear();
   peaks.reserve(100);  
-  const int step = 3; //this is the best value for spike counting
+  const int step = 2; //this is the best value for spike counting
   //no point searching pileups if it is a small pulse
   if(range.endIndex-range.startIndex<=step){
     peaks.push_back(range);

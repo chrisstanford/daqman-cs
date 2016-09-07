@@ -168,7 +168,10 @@ int PSD::Process(ChannelData *chdata){
     if(region.evaluated) ProcessPulse(chdata, region);
   }
 
-  //do not process pulses -- not being saved
+  for(size_t i=0; i<chdata->pulses.size(); i++){
+    Pulse & pulse = chdata->pulses.at(i);
+    if(pulse.evaluated) ProcessPulse(chdata, pulse);
+  }
 
   //process the tofs
   for(size_t i=0; i<chdata->tof.size(); i++){

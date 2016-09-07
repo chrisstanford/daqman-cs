@@ -63,7 +63,7 @@ private:
   //if both relative to bls and spe are set to be true, initilize will fail
   double pulse_start_add_us;                    ///< time in us to add before pulse start
   double pulse_end_add_us;                      ///< time in us to add after pulse end
-  //  int spike_edge_add_nsamps;                 ///< n samples to add on spike edge
+  int spike_edge_add_nsamps;                 ///< n samples to add on spike edge
 };
 
 //override stream ops for SearchMode
