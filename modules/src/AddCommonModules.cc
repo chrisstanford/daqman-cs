@@ -4,6 +4,7 @@
 #include "PulseFinder.hh"
 #include "TOF.hh"
 #include "PSD.hh"
+#include "Position.hh"
 #include "SpeFinder.hh"
 #include "SumChannels.hh"
 #include "EvalRois.hh"
@@ -23,6 +24,7 @@ int EventHandler::AddCommonModules()
   AddModule<PulseEvaluator>();
   AddModule<TOF>();
   AddModule<PSD>();
+  AddModule<Position>();
   AddModule<AverageWaveforms>();
   return 11;
 }

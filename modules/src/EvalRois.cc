@@ -49,7 +49,7 @@ int EvalRois::Process(ChannelData* chdata)
     //    region.Print(chdata->channel_id, index);
     chdata->regions.push_back(region);
   }
-  
+
   return 0;
 }
      

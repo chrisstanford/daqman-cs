@@ -34,18 +34,20 @@ public:
   double operator()(double x, double y) { return x + y*_scale_factor; }
 };
 
-int SumChannels::Process(EventPtr event)
-{
-  ChannelData sumdata;
-  sumdata.channel_id = ChannelData::CH_SUM;
-  sumdata.label = "sum";
-  sumdata.sample_bits = 32;
-  int n_channels_summed = 0;
+int SumChannels::Process(EventPtr event){
+
   EventDataPtr data = event->GetEventData();
   if (data->channels.size() < 2)
     //No point in summing channels
     return 0;
 
+  data->channels.push_back(ChannelData());
+  ChannelData &sumdata = data->channels.back();
+  sumdata.channel_id = ChannelData::CH_SUM;
+  sumdata.label = "sum";
+  sumdata.sample_bits = 32;
+
+  int n_channels_summed = 0;
   double sum_bl_sigma=0;  
   for(size_t i=0; i<data->channels.size(); i++){
     const ChannelData& chdata = data->channels[i];
@@ -110,7 +112,6 @@ int SumChannels::Process(EventPtr event)
     sumdata.minimum = *min_samp;
     sumdata.max_time = sumdata.SampleToTime(max_samp - wave);
     sumdata.min_time = sumdata.SampleToTime(min_samp - wave);
-    data->channels.push_back(sumdata);
   }
   return 0;
   

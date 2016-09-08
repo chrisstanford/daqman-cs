@@ -144,10 +144,10 @@ void ChannelData::Draw(bool baseline_subtracted, int downsample,
   }//end loop over pulses
 
   //Draw the region start, end, and amplitude if there
-  for(size_t i=0; i<tof.size(); i++){
-    Pulse& region = tof[i];
-//   for(size_t i=0; i<regions.size(); i++){
-//    Pulse& region = regions[i];
+//   for(size_t i=0; i<tof.size(); i++){
+//     Pulse& region = tof[i];
+  for(size_t i=0; i<regions.size(); i++){
+    Pulse& region = regions[i];
     double base = (baseline_subtracted ? 0 : baseline.mean);
     double peaky = base  - region.peak_amplitude;
     TBox* pbox = new TBox( x[region.start_index], base,

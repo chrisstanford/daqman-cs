@@ -184,8 +184,8 @@ int PSD::Process(ChannelData *chdata){
 
 //this is not a critical module, return 0 for all cases
 void PSD::ProcessPulse(ChannelData *chdata, Pulse & pulse){
-
-  if(chdata->integral.empty()) return;
+  
+  if(chdata->integral.empty() || !(pulse.evaluated)) return;
 
   //todo: need to test all these new algorithms
   //calculate the fparameters 

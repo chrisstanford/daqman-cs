@@ -66,12 +66,13 @@ void FitChannelSPE(int ch_id, double fit_min, double fit_max,
 bool FileExists(const char* filename, bool print=false);
 
 template <typename T>
-inline size_t LoadArray(size_t N, T ary[], const char *fname,
-			size_t lstart, size_t column){
+inline int LoadArray(int N, T ary[], const char *fname,
+		     int lstart, int column){
   if(!FileExists(fname)) return 0;
-  size_t count=0, lnum=0, content=0, space=0;
+  size_t content=0, space=0;
+  int lnum=0, count=0;
   bool accept=false;
-  string line;
+  std::string line;
   ifstream infile(fname);
   if(infile.is_open()){
     while(!infile.eof()){
@@ -79,14 +80,14 @@ inline size_t LoadArray(size_t N, T ary[], const char *fname,
       if(++lnum<lstart) continue;
       accept=false;
       content=space=0;
-      for(size_t i=0; i<column; i++){
+      for(int i=0; i<column; i++){
         content=line.find_first_not_of(" \t", space);
-        if(content==string::npos) break;
+        if(content==std::string::npos) break;
         space=line.find_first_of(" \t", content);
-        if(space==string::npos) space=line.length();
+        if(space==std::string::npos) space=line.length();
         if(i==column-1&&space>content) accept=true;
       }
-      if(!accept) continue;
+      if(!accept){ ary[count] = 0; continue;}
       if(count>=N) {
         std::cout<<"More data than wanted, the first "<<N<<" are read!"<<std::endl;
         break;
@@ -94,7 +95,7 @@ inline size_t LoadArray(size_t N, T ary[], const char *fname,
       //this may need to be improved.
       //may want to use  boost/lexical_cast if we can make sure boost is available 
       T value;
-      istringstream istr(line.substr(content,space-content));
+      std::istringstream istr(line.substr(content,space-content));
       if(!(istr>>value)) value = 0;
       ary[count] = value;
       //      std::cout<<count<<'\t'<<ary[count]<<std::endl;
@@ -105,7 +106,7 @@ inline size_t LoadArray(size_t N, T ary[], const char *fname,
   
   if(count<N){
     //    std::cout<<"Less data acqusited! "<<count<<std::endl;
-    for(size_t i=count;i<N;i++) ary[i]=0;
+    for(int ii=count;ii<N;ii++) ary[ii]=0;
   }
   std::cout<<fname<<" Loaded!"<<std::endl;
   return count;

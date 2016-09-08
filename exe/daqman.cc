@@ -28,6 +28,7 @@
 #include "PulseEvaluator.hh"
 #include "SpeFinder.hh"
 #include "TOF.hh"
+#include "Position.hh"
 #include "SpectrumMaker.hh"
 #include "ConvertData.hh"
 #include "SumChannels.hh"
@@ -118,6 +119,7 @@ int main(int argc, char** argv)
   thread1.AddModule(new PulseFinder);
   thread1.AddModule(new PulseEvaluator);
   thread1.AddModule(new TOF);
+  thread1.AddModule(new Position);
   async_threads.push_back(&thread1);
   // any more advanced functions?
   

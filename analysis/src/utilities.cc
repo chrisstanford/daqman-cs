@@ -25,8 +25,6 @@
 #include "TList.h"
 #include "TClassMenuItem.h"
 
-  
-
 #include "TGFileDialog.h"
 
 #include "Reader.hh"
@@ -39,6 +37,8 @@
 #include <fstream>
 #include <sstream>
 #include <iomanip>
+#include <sys/stat.h>
+
 using namespace std;
 
 TFile* OpenFile(const char* filename, const char* option)
@@ -439,9 +439,15 @@ void FitChannelSPE(int ch_id, double fit_min, double fit_max,
     cspe->Update();
 
   }
-
   std::cout<<"Final fit result: ( "<<ch_id<<" , "<<fspe->GetParameter(4)<<" ) "<<std::endl;
 
   return;
+}
 
+//test a file exists or not w/o trying to open it 
+bool FileExists(const char* filename, bool print){
+  struct stat info;
+  bool exist=(stat(filename, &info)==0);
+  if(!exist && print) std::cerr<<filename<<" Not Exist!"<<std::endl;
+  return exist;
 }
