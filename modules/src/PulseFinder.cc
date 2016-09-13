@@ -227,16 +227,27 @@ int PulseFinder::FindChannelPulses(ChannelData* chdata){
 
   //due to the way we define the summed waveform, there may be an offset between raw waveform minima
   //and summed waveform minima
-  double offset_nsamps = filter_nsamps/(-4);
+  double offset_nsamps = filter_nsamps/(-2);
   
   //here we push the pulses to the channel data
   chdata->pulses.reserve(peaks_split.size());
   for (size_t i = 0; i < peaks_split.size();  i++){
     //     std::cout<<chdata->channel_id<<'\t'<<i<<'\t'<<chdata->SampleToTime(peaks_split.at(i).startIndex)
     // 	     <<'\t'<<chdata->SampleToTime(peaks_split.at(i).endIndex)<<std::endl;
-    AddOffsetWithBounds<int>(peaks_split.at(i).startIndex, offset_nsamps, 0, chdata->nsamps-1);
-    //    AddOffsetWithBounds<int>(peaks_split.at(i).peakIndex, offset_nsamps*2, 0, chdata->nsamps-1);
-    AddOffsetWithBounds<int>(peaks_split.at(i).endIndex, offset_nsamps, 0, chdata->nsamps-1);
+
+    //if this pulse shares boundary with the next pulse
+    if(offset_nsamps && i+1<peaks_split.size() && //we have a next pulse
+       peaks_split.at(i).endIndex+1>=peaks_split.at(i+1).startIndex && //there is an overlap between pulses
+       peaks_split.at(i+1).peakIndex>peaks_split.at(i+1).startIndex && //next pulse has a valid peak index
+       FirstAmplitudeIsSmaller(0,wave[peaks_split.at(i+1).startIndex],wave[peaks_split.at(i+1).peakIndex]) ){ //double sure overlap
+      double offset_fraction = wave[peaks_split.at(i+1).startIndex]/wave[peaks_split.at(i+1).peakIndex];
+      //this is an empirical function that seems to work for thr ArTPC data
+      offset_fraction = sqrt(offset_fraction*(2.-offset_fraction));
+      //      std::cout<<"Overlap time corrected: "<<-0.5*filter_time*offset_fraction<<std::endl;
+      AddOffsetWithBounds<int>(peaks_split.at(i).endIndex, offset_nsamps*offset_fraction, 0, chdata->nsamps-1);
+      AddOffsetWithBounds<int>(peaks_split.at(i+1).startIndex, offset_nsamps*offset_fraction, 0, chdata->nsamps-1);
+      //    AddOffsetWithBounds<int>(peaks_split.at(i).peakIndex, offset_nsamps*offset_fraction, 0, chdata->nsamps-1);
+    }//end if
 
     Pulse pulse;
     pulse.start_index = peaks_split.at(i).startIndex;
