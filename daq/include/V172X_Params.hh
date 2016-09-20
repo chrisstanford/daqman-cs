@@ -36,7 +36,7 @@ enum TRIGGER_POLARITY {TP_RISING = 0, TP_FALLING = 1};
 /** @enum BOARD_TYPE
     @brief defines the available models of V172X digitzer
 */
-enum BOARD_TYPE { V1724 = 0, V1721 = 1, V1720 = 3 , V1751 = 5, OTHER = 256};
+enum BOARD_TYPE { V1724 = 0, V1721 = 1, V1720 = 3 , V1725 = 4 , V1751 = 5, OTHER = 256};
 
 //need iostream operators for all enums
 /// SIGNAL_LOGIC ostream overload
