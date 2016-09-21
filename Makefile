@@ -166,7 +166,7 @@ LinkDef.h: $(DICTHEADS)
 
 $(DICT): $(DICTHEADS) LinkDef.h
 	@echo "  [ROOTCINT] $@"
-	@rootcint -f $@ -c $(CXXFLAGS) -p $^ 
+	rootcint -f $@ -c $(CXXFLAGS) -p $^ 
 
 $(BIN): bin/%: exe/%.o lib/libdaqman.so  
 	@echo "  [LD]  $@" 
