@@ -43,7 +43,7 @@ INCLUDES    := $(addprefix -I,$(INCLUDEDIRS))
 INCLUDES    += -I$(PWD)
 ROOTINCLUDEPATH := $(INCLUDES)
 #some systems want malloc
-INCLUDES    += -I/usr/include/malloc
+INCLUDES    += -I/usr/include/malloc -isystem ~/boost_1_61_0
 
 #generic c++ and ld flags
 CXXFLAGS    += $(DEBUGFLAGS) -O3 -g -Wall $(INCLUDES)  -Wno-format-y2k -fPIC
@@ -57,10 +57,10 @@ BUILDLIBS   := lib/libdaqman.so
 #some more optional libraries
 CAENLIBS    := -L/usr/local/lib64 -lCAENVME
 #specific hack to avoid corrupted libs on blackhole
-THREADLIBS  += -L/usr/local/lib -lboost_thread -lboost_date_time
+THREADLIBS  += -L/usr/local/lib -L/usr/lib/x86_64-linux-gnu/ -lboost_date_time -lboost_thread -lboost_system
 
 #hardcode the path to link against daqman
-LIBS     += -Wl,-rpath,$(PWD)/lib 
+LIBS     += -Wl,-rpath,$(PWD)/lib
 
 #find what OS we're on, determine shared library commands
 UNAME = "$(shell uname -s)"

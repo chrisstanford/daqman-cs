@@ -33,7 +33,8 @@ typedef enum CVBoardTypes {
         cvV1718 = 0,                    /* CAEN V1718 USB-VME bridge                    */
         cvV2718 = 1,                    /* V2718 PCI-VME bridge with optical link       */
         cvA2818 = 2,                    /* PCI board with optical link                  */
-        cvA2719 = 3                     /* Optical link piggy-back                      */
+        cvA2719 = 3,                    /* Optical link piggy-back                      */
+		cvA3818 = 4						/* PCIe board with up to 4 optical links		*/
 } CVBoardTypes;
 
 /*
