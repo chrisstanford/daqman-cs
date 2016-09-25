@@ -248,10 +248,15 @@ int V172X_Daq::Update()
 	  uint32_t npre = 
 	    std::ceil(channel.zs_pre_samps/board.stupid_size_factor);
 	  uint32_t npost = 
-	    std::ceil(channel.zs_pre_samps/board.stupid_size_factor);
+	    std::ceil(channel.zs_post_samps/board.stupid_size_factor);
 	  nsamp = (npre<<16) + npost;
 	}
-	WriteVMERegister(board.address+ VME_ChZSNsamples+i*0x100, nsamp, _handle_board[iboard]);
+	//warning: what shall we do with the ZS n samples? 
+	if(board.board_type == V1725)//we just use the x4 gain, or 0.5V input range
+	  WriteVMERegister(board.address+ VME_ChZSNsamples+i*0x100, 1, _handle_board[iboard]);
+	else 
+	  WriteVMERegister(board.address+ VME_ChZSNsamples+i*0x100, nsamp, _handle_board[iboard]);
+
 	//trigger threshold
 	WriteVMERegister(board.address+ VME_ChTrigThresh+i*0x100, 
 			 channel.threshold, _handle_board[iboard]);
@@ -260,7 +265,12 @@ int V172X_Daq::Update()
 	  / board.stupid_size_factor;
 	
 	if(nsamp >= (1<<12)) nsamp = (1<<12) - 1;
-	WriteVMERegister(board.address+ VME_ChTrigSamples+i*0x100, nsamp, _handle_board[iboard]);
+	if(board.board_type == V1725) {//warning: 1n84 is trigger logic now, maybe write to 1n70?
+	  //we may need to write to 1n84 to make this meaningful
+	  WriteVMERegister(board.address+ 0x1070+i*0x100, nsamp, _handle_board[iboard]);
+	}
+	else
+	  WriteVMERegister(board.address+ VME_ChTrigSamples+i*0x100, nsamp, _handle_board[iboard]);
 	//dc offset
 	WriteVMERegister(board.address+ VME_ChDAC+i*0x100, channel.dc_offset, _handle_board[iboard]);
 	//wait until the dac has updated

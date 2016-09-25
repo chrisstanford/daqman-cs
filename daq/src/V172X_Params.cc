@@ -26,7 +26,7 @@ V172X_ChannelParams::V172X_ChannelParams() :
   ParameterList("V172X_ChannelParams", 
 		"Information about a single channel in a CAEN V172X digitizer")
 {
-  RegisterParameter("enabled", enabled=true, 
+  RegisterParameter("enabled", enabled=false, 
 		    "Is this channel active in the current run?");
   RegisterParameter("enable_trigger_source", enable_trigger_source=false,
 		    "Does this channel generat local trigger signals?");
@@ -192,6 +192,14 @@ int V172X_BoardParams::UpdateBoardSpecificVariables()
     stupid_size_factor = 7;
     ns_per_clocktick = 4;
     break;
+  case V1725:
+    max_sample_rate = 250.;
+    sample_bits = 14;
+    bytes_per_sample = 2;
+    v_full_scale = 2;
+    stupid_size_factor = 2; //this is to make the ZS thing to be right?
+    ns_per_clocktick = 8;
+    break;
   default:
     return -1;
     
@@ -231,6 +239,8 @@ uint32_t V172X_BoardParams::GetBufferCode() const
   int max_samples = mem_size*Mbyte / bytes_per_sample;
   if(board_type == V1751)
     max_samples = (int)(Mbyte * (mem_size == 0x02 ? 1.835 : 14.4 ));
+  else if(board_type == V1725)// samples per channel, instead of MB/ch
+    max_samples = (int)(Mbyte * (mem_size == 0x01 ? 0.64 : 5.12 ));
   uint32_t buffer_code = (uint32_t)floor(log2(max_samples / GetTotalNSamps()));
   if(buffer_code > 0xA)
     buffer_code = 0xA;
@@ -241,6 +251,8 @@ uint32_t V172X_BoardParams::GetCustomSizeSetting() const
 {
   if(board_type == V1751)
     return GetTotalNSamps()/stupid_size_factor;
+  else if(board_type == V1725)
+    return GetTotalNSamps()/10;
   return GetTotalNSamps()*bytes_per_sample/
     ( sizeof(uint32_t) * stupid_size_factor);
 }
@@ -250,6 +262,8 @@ uint32_t V172X_BoardParams::GetPostTriggerSetting() const
   const int latency = 10;
   if(board_type == V1751)
     return GetPostNSamps() / 16 - latency;
+  else if(board_type == V1725)
+    return GetPostNSamps() / 4; // warning: what to do with the latency?
   return GetPostNSamps()/(2*stupid_size_factor) - latency;
   
 }
@@ -350,6 +364,8 @@ std::ostream& operator<<(std::ostream& out, const BOARD_TYPE& type)
     return out<<"V1721";
   else if (type == V1751)
     return out<<"V1751";
+  else if (type == V1725)
+    return out<<"V1725";
   else 
     return out<<"OTHER";
 }
@@ -418,6 +434,8 @@ std::istream& operator>>(std::istream& in, BOARD_TYPE& type)
     type = V1721;
   else if (temp == "V1751")
     type = V1751;
+  else if (temp == "V1725")
+    type = V1725;
   else if (temp == "OTHER")
     type = OTHER;
   else{
