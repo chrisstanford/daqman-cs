@@ -62,6 +62,7 @@ private:
   double discriminator_nsigma;     ///< discriminator treshold value in baseline sigmas
   int discriminator_start_add;     ///< n samples to add before start
   int discriminator_end_add;       ///< n samples to add after end
+  bool discriminator_combine_overlapping_pulses;  ///< combine overlapping pulses into a single pulse
   //parameters for integral search
   // bool normalize_to_npe;           ///< Scale all searches by spemean?
   // double integral_start_time;      ///< time in us over which photons arrive

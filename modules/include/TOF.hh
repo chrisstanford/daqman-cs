@@ -8,11 +8,6 @@
 
 #include "ChannelModule.hh"
 
-//these are for fitting decay lifetimes
-class TGraph;
-class TF1;
-//class TCanvas;
-
 /** @class TOF
     @brief Searches for valid pulses in specified time windows and combine them for TOF study
     @ingroup modules
@@ -41,9 +36,5 @@ private:
   double neutron_start_time;
   double search_end_time;
   double pulse_length_us;
-
-  TGraph *gra;
-  TF1 *fit;
-  //  TCanvas *can;
 };
 #endif

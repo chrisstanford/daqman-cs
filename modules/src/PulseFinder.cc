@@ -80,6 +80,8 @@ PulseFinder::PulseFinder() :
 		    "Number of samples to add before the detected start of the pulse");
   RegisterParameter("discriminator_end_add", discriminator_end_add = 2,
 		    "Number of samples to add after the detected end of the pulse");
+  RegisterParameter("discriminator_combine_overlapping_pulses", discriminator_combine_overlapping_pulses = false,
+		    "Combine overlapping pulses into a single pulse");
   ///parameters for integral search
   // RegisterParameter("normalize_to_npe", normalize_to_npe=true,
   // 		    "normalize amplitude to spe before searching?");
@@ -175,6 +177,7 @@ int PulseFinder::Process(EventPtr evt)
 	for (size_t i = 0; i < start_index.size();  i++)
 	{
 	  if (start_index[i] >= end_index[i]) {
+	    std::cout<<i<<"/"<<start_index.size()<<" "<<start_index[i]<<" "<<end_index[i]<<std::endl;
 	    return -1;
 	  }
 	    Pulse pulse;
@@ -311,10 +314,12 @@ void PulseFinder::DiscriminatorSearch( ChannelData* chdata,
       if(wave[index-1]>check_val){//if just come to a pulse
         in_pulse = true;
         start_index.push_back(index-discriminator_start_add );
+	//	std::cout<<"New Pulse starting at "<<index-discriminator_start_add<<"/"<<search_end_index<<" wave[index]: "<<wave[index]<<" check_val: "<<check_val<<std::endl;
       }
       if(wave[index+1]>check_val){//if just leave a pulse
         if(in_pulse) end_index.push_back(index+discriminator_end_add );
         in_pulse = false;
+	//	std::cout<<"Pulse ending at "<<index+discriminator_end_add<<"/"<<search_end_index<<" wave[index]: "<<wave[index]<<" check_val: "<<check_val<<std::endl;
       }//end if wave index+1
     }//end if wave index <=
   }//end for int index
@@ -328,24 +333,60 @@ void PulseFinder::DiscriminatorSearch( ChannelData* chdata,
   //    return;
   //  }
 
-  //resoving overlapping pulses
-  for(size_t index=1; index<start_index.size(); index++){
-    // std::cout<<chdata->channel_id<<'\t'<<index<<'\t'<<chdata->SampleToTime(start_index.at(index))
-    // 	     <<'\t'<<chdata->SampleToTime(end_index.at(index))<<std::endl;
-    if(start_index.at(index)<=end_index.at(index-1)){
-      int middle_index = (start_index.at(index)+end_index.at(index-1))/2;
-      double max_value = wave[middle_index];
-      //      for(int j=start_index.at(index); j<=end_index.at(index-1); j++){
-      for(int j=end_index.at(index-1)-discriminator_end_add+1; j<start_index.at(index)+discriminator_start_add; j++){
-        if(wave[j]<=max_value) continue;
-        max_value = wave[j];
-        middle_index = j;
-      }//end for j loop
-      start_index.at(index) = middle_index;
-      end_index.at(index-1) = middle_index;
-    }//end if statement
-  }//end for index loop
-
+  // Resoving overlapping pulses
+  if (start_index.size()<=1) return;
+  if (discriminator_combine_overlapping_pulses) {
+    std::vector<int> combined_start_index;
+    std::vector<int> combined_end_index;
+    for(size_t index=0; index<start_index.size();){
+      combined_start_index.push_back(start_index.at(index));
+      //      std::cout<<"New Start: "<<start_index.at(index)<<std::endl;
+      while(++index && index<start_index.size() && start_index.at(index)<end_index.at(index-1));
+      combined_end_index.push_back(end_index.at(index-1));
+      //      std::cout<<"New End: "<<end_index.at(index-1)<<std::endl;
+    }
+    start_index.clear();
+    end_index.clear();
+    start_index = combined_start_index;
+    end_index = combined_end_index;
+  } else {
+    // for(size_t index=0; index<start_index.size(); index++){
+    //   std::cout<<"Pulse "<<index<<": "<<start_index.at(index)<<"-"<<end_index.at(index)<<std::endl;
+    // }
+    // Simple method: If pulses are overlapping, set end of early pulse to beginning of later pulse
+    for(size_t index=1; index<start_index.size(); index++){
+      if(start_index.at(index)<end_index.at(index-1)){
+	end_index.at(index-1)=start_index.at(index);
+      }
+    }
+    // Remove pulses that end before they start
+    for(size_t index=0; index<start_index.size(); index++){
+      if(end_index.at(index)<start_index.at(index)) {
+	start_index.erase(start_index.begin() + index);
+	end_index.erase(end_index.begin() + index);
+      }
+    }
+    // for(size_t index=0; index<start_index.size(); index++){
+    //   std::cout<<"New Pulse "<<index<<": "<<start_index.at(index)<<"-"<<end_index.at(index)<<std::endl;
+    // }
+    // Advanced method
+    // for(size_t index=1; index<start_index.size(); index++){
+    //   // std::cout<<chdata->channel_id<<'\t'<<index<<'\t'<<chdata->SampleToTime(start_index.at(index))
+    //   // 	     <<'\t'<<chdata->SampleToTime(end_index.at(index))<<std::endl;
+    //   if(start_index.at(index)<=end_index.at(index-1)){
+    // 	int middle_index = (start_index.at(index)+end_index.at(index-1))/2;
+    // 	double max_value = wave[middle_index];
+    // 	//      for(int j=start_index.at(index); j<=end_index.at(index-1); j++){
+    // 	for(int j=end_index.at(index-1)-discriminator_end_add+1; j<start_index.at(index)+discriminator_start_add; j++){
+    // 	  if(wave[j]<=max_value) continue;
+    // 	  max_value = wave[j];
+    // 	  middle_index = j;
+    // 	}//end for j loop
+    // 	start_index.at(index) = middle_index;
+    // 	end_index.at(index-1) = middle_index;
+    //   }//end if statement
+    // }//end for index loop
+  }
   // for(size_t index=0; index<start_index.size(); index++)
   //   std::cout<<chdata->channel_id<<'\t'<<index<<'\t'<<chdata->SampleToTime(start_index.at(index))
   //    	     <<'\t'<<chdata->SampleToTime(end_index.at(index))<<std::endl;

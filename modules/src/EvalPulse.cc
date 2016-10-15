@@ -27,7 +27,7 @@ int EvaluatePulse(Pulse& pulse, ChannelData* chdata, double max_peak_time){
   pulse.peak_index = peak_index;
   pulse.peak_time = chdata->SampleToTime(pulse.peak_index);
   pulse.peak_amplitude = -subtracted[peak_index]; //pulse are neg, amplitude pos
-
+  
   //to look for 50% threshold time
   int index=-1;
   //  double threshold = 0.5*subtracted[peak_index];

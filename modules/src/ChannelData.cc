@@ -133,7 +133,7 @@ void ChannelData::Draw(bool baseline_subtracted, int downsample,
     TBox* pbox = new TBox( x[pulse.start_index], base,
 			   x[pulse.end_index], peaky);
     pbox->SetBit(TObject::kCanDelete,true);
-    pbox->SetLineColor(kGreen);
+    pbox->SetLineColor(kOrange);
     pbox->Draw();
     
     TLine* pline = new TLine( x[pulse.peak_index], base,
@@ -144,10 +144,8 @@ void ChannelData::Draw(bool baseline_subtracted, int downsample,
   }//end loop over pulses
 
   //Draw the region start, end, and amplitude if there
-  for(size_t i=0; i<tof.size(); i++){
-    Pulse& region = tof[i];
-//   for(size_t i=0; i<regions.size(); i++){
-//    Pulse& region = regions[i];
+  for(size_t i=0; i<regions.size(); i++){
+    Pulse& region = regions[i];
     double base = (baseline_subtracted ? 0 : baseline.mean);
     double peaky = base  - region.peak_amplitude;
     TBox* pbox = new TBox( x[region.start_index], base,

@@ -40,15 +40,24 @@ public:
   double max_fprompt;
   double min_tof;
   double max_tof;
-
+  bool normalize_by_total_waveforms;
+  bool one_pulse_only;
   //not set in config file
   int post_trigger_nsamps;
 
+  bool bipo_mode;
+
+  int run_id;
+  double spe;
+  double spe_int;
+  bool include_errors_from_afterpulse;
 private:
   void Cleanup();
   std::map<int,TGraphErrors*> _plots;
   std::map<int,double> _sum;
   std::map<int,double> _sum2;
+
+  std::map<int,int> _total_waveforms;
 };
 
 #endif

@@ -28,6 +28,7 @@ public:
 
   //parameters
   bool flat_baseline;         /// use fixed baseline algorithm
+  bool stanford_baseline;     /// use Chris Stanford's baseline algorithm
   double pulse_start_time;    /// time when the pulses are expected to arrive, baseline should end
   int min_valid_nsamps;       /// minimum valid sample number in the pre trigger window
   int pulse_edge_add;         /// sample number to be added to the edge of a possible pulse
@@ -43,10 +44,13 @@ public:
   int max_flat_nsamps;        /// maximum sample number to stay "flat" inside a pulse
   double min_good_fraction;   /// Minimum fraction of valid samples in a moving window
 
+  double start_RMS_factor;    /// If a sample is start_RMS_factor*baseline_RMS away from the baseline_mean, then start the pulse
+  double end_RMS_factor;      /// If a moving_window_nsamps consecutive samples are within maseline_mean +/- end_RMS_factor*baseline_RMS, then end the pulse
+
 private:
   int FlatBaseline(ChannelData* chdata);
   int DriftingBaseline(ChannelData* chdata);
-
+  int StanfordBaseline(ChannelData* chdata);
 };
 
 #endif

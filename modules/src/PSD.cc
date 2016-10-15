@@ -36,6 +36,8 @@ PSD::PSD() :
   // RegisterParameter("",  = , "");
   weights = NULL;
   rebined_pulse = NULL;
+  fparameter_times.clear();
+  tparameter_ratios.clear();
 }
 
 PSD::~PSD()
@@ -168,13 +170,18 @@ int PSD::Process(ChannelData *chdata){
     if(region.evaluated) ProcessPulse(chdata, region);
   }
 
-  //do not process pulses -- not being saved
+  //process the pulses
+  for(size_t i=0; i<chdata->pulses.size(); i++){
+    Pulse & pulse = chdata->pulses.at(i);
+    if(pulse.evaluated) ProcessPulse(chdata, pulse);
+  }
 
   //process the tofs
   for(size_t i=0; i<chdata->tof.size(); i++){
     Pulse & tof = chdata->tof.at(i);
     if(tof.evaluated) ProcessPulse(chdata, tof);
   }
+  
 
   return 0;
 }
@@ -225,23 +232,15 @@ void PSD::ProcessPulse(ChannelData *chdata, Pulse & pulse){
   const double* wave = chdata->GetBaselineSubtractedWaveform();
 
   //calculate the mean time for NaI only, use test parameter for now
-  //  int half_max_index = chdata->TimeToSample(pulse.half_max_time, true);
-  int prompt_end_index = chdata->TimeToSample(pulse.half_max_time+0.15, true);//make it 0.15 for now
+  int half_max_index = chdata->TimeToSample(pulse.half_max_time, true);
   double mean_time=0, integral=0;
-  double l_mean_time=0, l_integral=0;
   for(int samp = pulse.start_index+1; samp<pulse.end_index; samp++){
     //    if((samp-pulse.start_index)/1.5/chdata->sample_rate<1){
       mean_time += wave[samp]*(samp-pulse.start_index);
       integral += wave[samp];
       //    }
-      //this is to calculate the late mean time
-      if(samp > prompt_end_index){
-	l_mean_time += wave[samp]*(samp-pulse.start_index);
-	l_integral += wave[samp];
-      }//end if
   }
   if(integral<0) pulse.mean_time = mean_time/chdata->sample_rate/integral;
-  if(l_integral<0) pulse.test = l_mean_time/chdata->sample_rate/l_integral;
   // for(size_t i=0; i<chdata->pulses.size(); i++){
   //   Pulse& ps = chdata->pulses[i];
   //   if(ps.start_index<pulse.start_index) continue;
@@ -251,7 +250,7 @@ void PSD::ProcessPulse(ChannelData *chdata, Pulse & pulse){
   //   }
   // }
   // if(pulse.integral<0) pulse.test = mean_time/chdata->sample_rate/pulse.integral;
-  /*
+
   //here test is a parameter to reject pileup events
   int search_max_index = chdata->TimeToSample(pulse.start_time+0.5, true);
   //  std::cerr<<">>Tests: "<<pulse.start_index<<'\t'<<search_max_index<<'\t'<<pulse.end_index<<std::endl;
@@ -263,7 +262,7 @@ void PSD::ProcessPulse(ChannelData *chdata, Pulse & pulse){
     // 				 subtracted + max_peak_index);
     pulse.tail_peak = -wave[peak_index]; //pulse are neg, amplitude pos
   }
-  */
+
   //calculate the gatti parameters
   if(!calculate_gatti || !weights || !rebined_pulse) return;
   //only calculate gatti for certain channels

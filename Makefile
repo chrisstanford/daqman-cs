@@ -43,7 +43,7 @@ INCLUDES    := $(addprefix -I,$(INCLUDEDIRS))
 INCLUDES    += -I$(PWD)
 ROOTINCLUDEPATH := $(INCLUDES)
 #some systems want malloc
-INCLUDES    += -I/usr/include/malloc -isystem ~/boost_1_61_0
+INCLUDES    += -I/usr/include/malloc
 
 #generic c++ and ld flags
 CXXFLAGS    += $(DEBUGFLAGS) -O3 -g -Wall $(INCLUDES)  -Wno-format-y2k -fPIC
@@ -57,10 +57,18 @@ BUILDLIBS   := lib/libdaqman.so
 #some more optional libraries
 CAENLIBS    := -L/usr/local/lib64 -lCAENVME
 #specific hack to avoid corrupted libs on blackhole
-THREADLIBS  += -L/usr/local/lib -L/usr/lib/x86_64-linux-gnu/ -lboost_date_time -lboost_thread -lboost_system
+ifeq ("$(shell /bin/hostname)","blackhole.lngs.infn.it")
+THREADLIBS  += -L/usr/local/lib64/boost -lboost_thread -lboost_date_time
+else
+ifeq ("$(shell /sbin/ldconfig -p | grep libboost_thread-mt.so)","") 
+THREADLIBS  += -L/usr/local/lib64/boost -lboost_thread -lboost_date_time
+else
+THREADLIBS  += -lboost_thread-mt -lboost_date_time-mt
+endif
+endif
 
 #hardcode the path to link against daqman
-LIBS     += -Wl,-rpath,$(PWD)/lib
+LIBS     += -Wl,-rpath,$(PWD)/lib 
 
 #find what OS we're on, determine shared library commands
 UNAME = "$(shell uname -s)"
@@ -74,12 +82,14 @@ endif
 else 
 ifeq ($(UNAME),"Darwin")
 CXXFLAGS += -DMAC_OSX -DLINUX
+#add fink if we're on a mac system
+INCLUDES += -I/sw/include
+LDFLAGS  += -L/sw/lib
 LIBFLAGS += -dynamiclib -single_module -undefined dynamic_lookup
-#LIBFLAGS += -install_name $(PWD)/lib/$@
-LIBFLAGS += -install_name $(PWD)/$@
+LIBFLAGS += -install_name $(PWD)/lib/$@
 #argus is retared and ignores rpath, looks in lib/lib for libraries?????
 #so do a terrible recursive soft link 
-#DUMMY := $(shell ln -s $(PWD)/lib lib/lib 2>/dev/null)
+DUMMY := $(shell ln -s $(PWD)/lib lib/lib 2>/dev/null)
 
 #no CAEN library for macs
 SKIPCAEN = true

@@ -18,6 +18,8 @@ BaselineFinder::BaselineFinder():
   //Register all the config handler parameters
   RegisterParameter("flat_baseline", flat_baseline = false,
 		    "Search for a flat baseline in pre-trigger window, otherwise search for a drifting baseline");
+  RegisterParameter("stanford_baseline", stanford_baseline = false,
+		    "Use Chris Stanford's Baseline finder algorithm");
   RegisterParameter("pulse_start_time", pulse_start_time = -0.1,
                     "Time when the pulses are expected to arrive, baseline should end ");
   RegisterParameter("min_valid_nsamps", min_valid_nsamps = 10,
@@ -48,6 +50,13 @@ BaselineFinder::BaselineFinder():
                     "Maximum number of counts staying flat within a pulse");
   RegisterParameter("min_good_fraction", min_good_fraction = 0.5,
 		    "Minimum fraction of valid samples in a moving window");
+ 
+
+  //parameters for Chris Stanford's baseline
+  RegisterParameter("start_RMS_factor",  start_RMS_factor = 6,
+                    "If a sample is start_RMS_factor*baseline_RMS away from the baseline_mean, then start the pulse");
+  RegisterParameter("end_RMS_factor",  end_RMS_factor = 5,
+                    "If a moving_window_nsamps consecutive samples are within maseline_mean +/- end_RMS_factor*baseline_RMS, then end the pulse");
 
 }
 
@@ -78,7 +87,8 @@ int BaselineFinder::Finalize()
 int BaselineFinder::Process(ChannelData* chdata)
 {
   int run_result=-1;
-  if(!flat_baseline) run_result=DriftingBaseline(chdata);
+  if(stanford_baseline) run_result=StanfordBaseline(chdata);
+  if(run_result && !flat_baseline) run_result=DriftingBaseline(chdata);
   if(run_result) run_result=FlatBaseline(chdata);
   return 0;
 }
@@ -198,7 +208,7 @@ int BaselineFinder::DriftingBaseline(ChannelData* chdata)
       //      std::cout<<"The average at ~0.2us is: "<<aver<<std::endl;
     }
     mask_begin = chdata->TimeToSample(-0.1);
-    if(aver<baseline_est-2.) mask_end = chdata->TimeToSample(5.+0.035*(baseline_est-aver));
+    if(aver<baseline_est-3.5) mask_end = chdata->TimeToSample(5.+0.035*(baseline_est-aver));
     for(int samp=mask_begin; samp<mask_end; samp++)
       mask[samp]=1;
   }
@@ -296,6 +306,7 @@ int BaselineFinder::DriftingBaseline(ChannelData* chdata)
   for(int i=0; i<nsamps; i++){
     baseform[i] = wave[i]-baseform[i];
   }
+  
   return 0;
 
 }
@@ -404,4 +415,143 @@ int BaselineFinder::FlatBaseline(ChannelData* chdata){
 
   return 0;
 
+}
+
+
+double windowMean(double* wave, int start_index, int lookback) {
+  int n=0;
+  double v=0.;
+  for (int i=start_index-lookback+1; i<=start_index; i++) {
+    if (i<0) continue;
+    v+=wave[i];
+    n++;
+  }
+  return n==0 ? wave[0] : v/n;
+}
+
+double windowRMS(double* wave, int start_index, int lookback) {
+  int n=0;
+  double v=0.;
+  for (int i=start_index-lookback+1; i<=start_index; i++) {
+    if (i<0) continue;
+    double mean = windowMean(wave, start_index, lookback);
+    v+=(wave[i]-mean)*(wave[i]-mean);
+    n++;
+  }
+  return n==0 ? 0 : sqrt(v/n);
+}
+
+double withinRange(double* wave, int start_index, int lookback, double mean, double range) {
+  for (int i=start_index-lookback+1; i<=start_index; i++) {
+    if (i<0) continue;
+    if (fabs(wave[i]-mean) > range) return false;
+  }
+  return true;  
+}
+
+int BaselineFinder::StanfordBaseline(ChannelData* chdata)
+{
+  // Method: Identify pulses by getting a baseline RMS and a running baseline mean defining the start of the pulse to be when the pulse goes outside of mean +/- start_RMS_factor*RMS. Then the end of the pulse is when end_samples_within_RMS consecutive samples are within the mean +/- RMS from before the pulse began.
+
+  Baseline & baseline = chdata->baseline;
+  double* wave = chdata->GetWaveform();
+  const int nsamps = chdata->nsamps;
+  if(nsamps<1) return -1;
+
+  std::vector<double>& baseform = chdata->subtracted_waveform;
+  baseform.resize(nsamps);
+  
+  // Initialize variables
+  double total_baseline_sum = 0.;
+  double total_baseline_rms = 0.;
+  int total_baseline_nsamps = 0;
+  bool in_pulse = false;
+  double pre_pulse_window_mean = 0.; // The mean taken just before the current pulse
+  //  double pre_pulse_window_RMS = 0.; // The RMS taken just before the current pulse
+  double baseline_RMS = windowRMS(wave,20,20);
+  //  std::cout<<"baseline_RMS: "<<baseline_RMS<<std::endl;
+  std::vector<int> pulse_start;
+  std::vector<int> pulse_end;
+  // Loop over samples
+  for(int samp=0;samp<moving_window_nsamps/**/;samp++) baseform[samp] = wave[samp];
+  for(int samp=moving_window_nsamps/**/; samp<nsamps; samp++){
+    // double preMean = windowMean(wave,samp-pulse_edge_add,moving_window_nsamps/**/);
+    // double preRMS  = windowRMS(wave,samp-pulse_edge_add,moving_window_nsamps/**/);
+    double preMean = windowMean(wave,samp-1,moving_window_nsamps-1/**/);
+    //    double preRMS  = windowRMS(wave,samp-1,moving_window_nsamps-1/**/);
+    // Identify start of pulse
+    if (in_pulse == false && fabs(wave[samp]-preMean) > start_RMS_factor*baseline_RMS) {
+      //      std::cout<<"Start pulse at "<<chdata->SampleToTime(samp)<<std::endl;
+      //      std::cout<<"preMean "<<preMean<<std::endl;
+      //      std::cout<<"preRMS "<<preRMS<<std::endl;
+      
+      pulse_start.push_back(samp-pulse_edge_add);
+      pre_pulse_window_mean = preMean;
+      //      pre_pulse_window_RMS = preRMS;
+      in_pulse = true;
+    }
+    // Identify end of pulse
+    if (in_pulse == true && withinRange(wave,samp,moving_window_nsamps,pre_pulse_window_mean,end_RMS_factor*baseline_RMS)) {
+      pulse_end.push_back(samp);
+      in_pulse = false;
+      //      std::cout<<"Pulse end at "<<chdata->SampleToTime(samp)<<std::endl;
+    }
+    baseform[samp] = windowMean(wave,samp,moving_window_nsamps/**/);
+    if (in_pulse == false) {
+      total_baseline_sum += wave[samp];
+      total_baseline_rms += (wave[samp]-preMean)*(wave[samp]-preMean);
+      total_baseline_nsamps += 1;
+    }
+    // Debug
+    int start_print =  chdata->TimeToSample(11.9);
+    int end_print =  chdata->TimeToSample(12.4);
+    if (samp>start_print && samp<end_print) {
+      //      std::cout<<"Sample: "<<samp<<" Time: "<<chdata->SampleToTime(samp)<<" wave: "<<wave[samp]<<" windowMean: "<<windowMean(wave,samp,moving_window_nsamps/**/)<<" in_pulse: "<<in_pulse<<std::endl;
+    }
+  }
+  if (in_pulse) {
+    pulse_end.push_back(nsamps-1);
+    in_pulse = false;
+  }
+  if (pulse_start.size() != pulse_end.size()) // Something went terribly wrong
+    return 0; // without setting found_baseline = true
+
+  // Combine pulses that are not separated by more than min_valid_nsamps
+  int n_pulses = pulse_start.size();
+  for (int p=1; p<n_pulses; ) {
+    if (pulse_start.at(p)-pulse_end.at(p-1) < min_valid_nsamps) {
+      n_pulses--;
+      pulse_end.at(p-1) = pulse_end.at(p); // Set previous pulse end to current pulse end
+      pulse_start.erase(pulse_start.begin()+p); // Delete current pulse
+      pulse_end.erase(pulse_end.begin()+p);
+    } else {
+      p++;
+    }
+  }
+  // Loop through pulses, setting the baseline in the pulse region to be a straight line from the ADC value at the start of the pulse to the ADC value at the end of the pulse
+  for (size_t p=0; p<pulse_start.size(); p++) {
+    int start_index = pulse_start.at(p);
+    int end_index = pulse_end.at(p);
+    int n_index = end_index-start_index;
+    double start_baseline_adc = baseform[start_index];
+    double end_baseline_adc = baseform[end_index];
+    for (int i=start_index; i<=end_index; i++) {
+      // Linear interpolation
+      double slope = (end_baseline_adc-start_baseline_adc)/n_index;
+      baseform[i]=start_baseline_adc+slope*(i-start_index);
+    }
+  } 
+  //subtract off the baseline
+  for(int samp=0; samp<nsamps; samp++){
+    //    if (samp%1000==0) std::cout<<wave[samp]<<" "<<baseform[samp]<<std::endl;
+    baseform[samp] = wave[samp]-baseform[samp];
+  }
+
+  // Set parameters
+  baseline.found_baseline=true;
+  baseline.mean = total_baseline_sum/total_baseline_nsamps;
+  baseline.sigma = sqrt(total_baseline_rms/total_baseline_nsamps);
+  baseline.length = total_baseline_nsamps;
+  
+  return 0;
 }

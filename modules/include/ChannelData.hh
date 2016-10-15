@@ -100,7 +100,7 @@ public:
   std::vector<double> subtracted_waveform; //!< Channel waveform after baseline subtraction
   //individual pulses
   int npulses; ///< number of pulses found
-  std::vector<Pulse> pulses;  //!< vector of individual pulses found 
+  std::vector<Pulse> pulses;  //< vector of individual pulses found 
   std::vector<Pulse> regions; ///< vector of ROIs for simple analysis
   std::vector<Pulse> tof;     ///< vector of Time of flight
   std::vector<Spe> single_pe; ///< vector of single photoelectron responses
@@ -114,7 +114,7 @@ public:
   double integral_max_time;     ///< time at which max integral occurs
   double integral_min_time;     ///< time at which min integral occurs
   
-  ClassDef(ChannelData,17)
+  ClassDef(ChannelData,18)
 };
 
 inline void ChannelData::Clear()
