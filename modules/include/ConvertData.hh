@@ -47,6 +47,10 @@ private:
   runinfo* _info;                ///< database information for this run
   long _id_mismatches;           ///< Number of events with ID mismatch
   bool _headers_only;            ///< Only process data headers, not the bulk
+
+  double waveform_start_time;             ///< truncate waveform to start_time 
+  double waveform_end_time;               ///< truncate waveform to end_time 
+  
 public:
 
 };

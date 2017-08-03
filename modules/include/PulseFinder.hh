@@ -87,6 +87,17 @@ private:
   double pulse_start_curvature;    ///< curvature threshold to start a new pulse  
   int pile_up_curvature;           ///< curvature threshold to start a pile up pulse
   double pulse_end_slope;          ///< slope threshold to end a pulse
+  double afterpulse_RMS_factor;    ///< RMS factor to tag an afterpulse
+  double afterpulse_window_nsamps; ///< Number of samples used to calculate the RMS for afterulses
+  double afterpulse_search_start;  ///< Start time for afterpulse search
+  double afterpulse_search_end;    ///< End time for afterpulse search
+  double cherenkov_discriminator_value; ///< Decriminator value for cherenkov search
+  double cherenkov_search_start;   ///< Start time for cherenkov search
+  double cherenkov_search_end;     ///< End time for cherenkov search
+
+  double windowMean(double* wave, int start_index, int lookback, int nsamps);
+  double windowRMS(double* wave, int start_index, int lookback, int nsamps);
+
 };
 
 //override stream ops for SearchMode

@@ -53,10 +53,16 @@ BaselineFinder::BaselineFinder():
  
 
   //parameters for Chris Stanford's baseline
+  RegisterParameter("baseline_start_nsamps",  baseline_start_nsamps = 100,
+                    "Number of samples to base the initial baseline RMS off of");
   RegisterParameter("start_RMS_factor",  start_RMS_factor = 6,
                     "If a sample is start_RMS_factor*baseline_RMS away from the baseline_mean, then start the pulse");
   RegisterParameter("end_RMS_factor",  end_RMS_factor = 5,
-                    "If a moving_window_nsamps consecutive samples are within maseline_mean +/- end_RMS_factor*baseline_RMS, then end the pulse");
+                    "If end_nsamps_within_RMS consecutive samples are within maseline_mean +/- end_RMS_factor*baseline_RMS, then end the pulse");
+  RegisterParameter("end_nsamps_within_RMS",  end_nsamps_within_RMS = 2*moving_window_nsamps,
+                    "If end_nsamps_within_RMS consecutive samples are within maseline_mean +/- end_RMS_factor*baseline_RMS, then end the pulse");
+  RegisterParameter("min_nsamps_between_pulses",  min_nsamps_between_pulses = 3*moving_window_nsamps,
+                    "Minimum number of samples between two pulses to consider them as separate");
 
 }
 
@@ -418,32 +424,44 @@ int BaselineFinder::FlatBaseline(ChannelData* chdata){
 }
 
 
-double windowMean(double* wave, int start_index, int lookback) {
+double windowMean(double* wave, int start_index, int lookback, int nsamps) {
   int n=0;
   double v=0.;
   for (int i=start_index-lookback+1; i<=start_index; i++) {
-    if (i<0) continue;
+    if (i<0 || i>=nsamps) continue;
     v+=wave[i];
     n++;
   }
   return n==0 ? wave[0] : v/n;
 }
 
-double windowRMS(double* wave, int start_index, int lookback) {
+double windowMean(std::vector<double> wave, size_t start_index, int lookback) {
+  int n=0;
+  double v=0.;
+  for (size_t i=start_index-lookback+1; i<=start_index; i++) {
+    if (i<0 || i>=wave.size()) continue;
+    v+=wave[i];
+    n++;
+  }
+  return n==0 ? wave[0] : v/n;
+}
+
+
+double windowRMS(double* wave, int start_index, int lookback, int nsamps) {
   int n=0;
   double v=0.;
   for (int i=start_index-lookback+1; i<=start_index; i++) {
-    if (i<0) continue;
-    double mean = windowMean(wave, start_index, lookback);
+    if (i<0 || i>=nsamps) continue;
+    double mean = windowMean(wave, start_index, lookback, nsamps);
     v+=(wave[i]-mean)*(wave[i]-mean);
     n++;
   }
   return n==0 ? 0 : sqrt(v/n);
 }
 
-double withinRange(double* wave, int start_index, int lookback, double mean, double range) {
+double withinRange(double* wave, int start_index, int lookback, double mean, double range, int nsamps) {
   for (int i=start_index-lookback+1; i<=start_index; i++) {
-    if (i<0) continue;
+    if (i<0 || i>=nsamps) continue;
     if (fabs(wave[i]-mean) > range) return false;
   }
   return true;  
@@ -451,7 +469,9 @@ double withinRange(double* wave, int start_index, int lookback, double mean, dou
 
 int BaselineFinder::StanfordBaseline(ChannelData* chdata)
 {
+  bool debug=0;
   // Method: Identify pulses by getting a baseline RMS and a running baseline mean defining the start of the pulse to be when the pulse goes outside of mean +/- start_RMS_factor*RMS. Then the end of the pulse is when end_samples_within_RMS consecutive samples are within the mean +/- RMS from before the pulse began.
+  if (debug) std::cout<<"1"<<std::endl;
 
   Baseline & baseline = chdata->baseline;
   double* wave = chdata->GetWaveform();
@@ -460,7 +480,7 @@ int BaselineFinder::StanfordBaseline(ChannelData* chdata)
 
   std::vector<double>& baseform = chdata->subtracted_waveform;
   baseform.resize(nsamps);
-  
+
   // Initialize variables
   double total_baseline_sum = 0.;
   double total_baseline_rms = 0.;
@@ -468,22 +488,29 @@ int BaselineFinder::StanfordBaseline(ChannelData* chdata)
   bool in_pulse = false;
   double pre_pulse_window_mean = 0.; // The mean taken just before the current pulse
   //  double pre_pulse_window_RMS = 0.; // The RMS taken just before the current pulse
-  double baseline_RMS = windowRMS(wave,20,20);
-  //  std::cout<<"baseline_RMS: "<<baseline_RMS<<std::endl;
+  double baseline_start_RMS = windowRMS(wave,baseline_start_nsamps,baseline_start_nsamps,nsamps);
+  double baseline_start_mean = windowMean(wave,20,20,nsamps);
+  for (int samp=0; samp<30; samp++) {
+    // Is the a pulse at the start of the baseline where the RMS is calculated?
+    if (fabs(wave[samp]-baseline_start_mean) > start_RMS_factor*baseline_start_RMS)
+      return 0; // without setting found_baseline = true
+  }
+
+  if (debug) std::cout<<"2"<<std::endl;
+
+  //  if (debug) std::cout<<"baseline_start_RMS: "<<baseline_start_RMS<<std::endl;
   std::vector<int> pulse_start;
   std::vector<int> pulse_end;
   // Loop over samples
-  for(int samp=0;samp<moving_window_nsamps/**/;samp++) baseform[samp] = wave[samp];
-  for(int samp=moving_window_nsamps/**/; samp<nsamps; samp++){
-    // double preMean = windowMean(wave,samp-pulse_edge_add,moving_window_nsamps/**/);
-    // double preRMS  = windowRMS(wave,samp-pulse_edge_add,moving_window_nsamps/**/);
-    double preMean = windowMean(wave,samp-1,moving_window_nsamps-1/**/);
-    //    double preRMS  = windowRMS(wave,samp-1,moving_window_nsamps-1/**/);
+  //  for(int samp=0;samp<moving_window_nsamps/**/;samp++) baseform[samp] = wave[samp];
+  for(int samp=0; samp<nsamps; samp++){
+    double preMean = windowMean(wave,samp-1,moving_window_nsamps,nsamps);
+    double thisMean = windowMean(wave,samp,moving_window_nsamps,nsamps);
     // Identify start of pulse
-    if (in_pulse == false && fabs(wave[samp]-preMean) > start_RMS_factor*baseline_RMS) {
-      //      std::cout<<"Start pulse at "<<chdata->SampleToTime(samp)<<std::endl;
-      //      std::cout<<"preMean "<<preMean<<std::endl;
-      //      std::cout<<"preRMS "<<preRMS<<std::endl;
+    if (in_pulse == false && fabs(wave[samp]-preMean) > start_RMS_factor*baseline_start_RMS) {
+      //      if (debug) std::cout<<"Start pulse at "<<chdata->SampleToTime(samp)<<std::endl;
+      //      if (debug) std::cout<<"preMean "<<preMean<<std::endl;
+      //      if (debug) std::cout<<"preRMS "<<preRMS<<std::endl;
       
       pulse_start.push_back(samp-pulse_edge_add);
       pre_pulse_window_mean = preMean;
@@ -491,12 +518,19 @@ int BaselineFinder::StanfordBaseline(ChannelData* chdata)
       in_pulse = true;
     }
     // Identify end of pulse
-    if (in_pulse == true && withinRange(wave,samp,moving_window_nsamps,pre_pulse_window_mean,end_RMS_factor*baseline_RMS)) {
+    //    if (in_pulse == true && withinRange(wave,samp,end_nsamps_within_RMS,pre_pulse_window_mean,end_RMS_factor*baseline_start_RMS,nsamps)) {
+    if (in_pulse == true && withinRange(wave,samp,end_nsamps_within_RMS,thisMean,end_RMS_factor*baseline_start_RMS,nsamps)) { // NEW Method
+      // std::cout<<windowMean(wave,samp,moving_window_nsamps/2,nsamps)<<std::endl;
+      // std::cout<<windowMean(wave,samp-moving_window_nsamps/2,moving_window_nsamps/2,nsamps)<<std::endl;
+      // std::cout<<pulse_start.back()+pulse_edge_add<<" "<<chdata->SampleToTime(pulse_start.back()+pulse_edge_add)<<std::endl;
+      // std::cout<<samp-end_nsamps_within_RMS<<" "<<chdata->SampleToTime(samp-end_nsamps_within_RMS)<<std::endl;
+      // std::cout<<samp-end_nsamps_within_RMS+(samp-end_nsamps_within_RMS-(pulse_start.back()+pulse_edge_add))<<" "<<chdata->SampleToTime(samp-end_nsamps_within_RMS+(samp-end_nsamps_within_RMS-(pulse_start.back()+pulse_edge_add)))<<std::endl<<std::endl;
+      //      pulse_end.push_back(samp-end_nsamps_within_RMS+3*(samp-end_nsamps_within_RMS-(pulse_start.back()+pulse_edge_add)));
       pulse_end.push_back(samp);
       in_pulse = false;
-      //      std::cout<<"Pulse end at "<<chdata->SampleToTime(samp)<<std::endl;
+      //      if (debug) std::cout<<"Pulse end at "<<chdata->SampleToTime(samp)<<std::endl;
     }
-    baseform[samp] = windowMean(wave,samp,moving_window_nsamps/**/);
+    baseform[samp] = thisMean;
     if (in_pulse == false) {
       total_baseline_sum += wave[samp];
       total_baseline_rms += (wave[samp]-preMean)*(wave[samp]-preMean);
@@ -506,7 +540,7 @@ int BaselineFinder::StanfordBaseline(ChannelData* chdata)
     int start_print =  chdata->TimeToSample(11.9);
     int end_print =  chdata->TimeToSample(12.4);
     if (samp>start_print && samp<end_print) {
-      //      std::cout<<"Sample: "<<samp<<" Time: "<<chdata->SampleToTime(samp)<<" wave: "<<wave[samp]<<" windowMean: "<<windowMean(wave,samp,moving_window_nsamps/**/)<<" in_pulse: "<<in_pulse<<std::endl;
+      //      if (debug) std::cout<<"Sample: "<<samp<<" Time: "<<chdata->SampleToTime(samp)<<" wave: "<<wave[samp]<<" windowMean: "<<windowMean(wave,samp,moving_window_nsamps/**/)<<" in_pulse: "<<in_pulse<<std::endl;
     }
   }
   if (in_pulse) {
@@ -516,10 +550,12 @@ int BaselineFinder::StanfordBaseline(ChannelData* chdata)
   if (pulse_start.size() != pulse_end.size()) // Something went terribly wrong
     return 0; // without setting found_baseline = true
 
+  if (debug) std::cout<<"3"<<std::endl;
+
   // Combine pulses that are not separated by more than min_valid_nsamps
   int n_pulses = pulse_start.size();
   for (int p=1; p<n_pulses; ) {
-    if (pulse_start.at(p)-pulse_end.at(p-1) < min_valid_nsamps) {
+    if (pulse_start.at(p)-pulse_end.at(p-1) < min_nsamps_between_pulses) {
       n_pulses--;
       pulse_end.at(p-1) = pulse_end.at(p); // Set previous pulse end to current pulse end
       pulse_start.erase(pulse_start.begin()+p); // Delete current pulse
@@ -528,6 +564,7 @@ int BaselineFinder::StanfordBaseline(ChannelData* chdata)
       p++;
     }
   }
+  if (debug) std::cout<<"4"<<std::endl;
   // Loop through pulses, setting the baseline in the pulse region to be a straight line from the ADC value at the start of the pulse to the ADC value at the end of the pulse
   for (size_t p=0; p<pulse_start.size(); p++) {
     int start_index = pulse_start.at(p);
@@ -536,16 +573,36 @@ int BaselineFinder::StanfordBaseline(ChannelData* chdata)
     double start_baseline_adc = baseform[start_index];
     double end_baseline_adc = baseform[end_index];
     for (int i=start_index; i<=end_index; i++) {
+      if (i<0 || i>=nsamps) continue;
       // Linear interpolation
       double slope = (end_baseline_adc-start_baseline_adc)/n_index;
       baseform[i]=start_baseline_adc+slope*(i-start_index);
     }
   } 
+
+  if (debug) std::cout<<"5"<<std::endl;
+  // // Smooth the baseline twice
+  // double* rough_bl = &baseform[0];
+  // double* smooth_bl = new double[nsamps];
+  // for(int i=0; i<nsamps; i++) {
+  //   // Set a sample's value to the mean of 2*moving_window_nsamps samples with this sample as its center.
+  //   smooth_bl[i] = 0;
+  //   smooth_bl[i] = windowMean(rough_bl, i+moving_window_nsamps, 2*moving_window_nsamps, nsamps);
+  // }
+  // if (debug) std::cout<<"6"<<std::endl;
+  // for(int i=0; i<nsamps; i++) {
+  //   // Set a sample's value to the mean of moving_window_nsamps samples with this sample as its center.
+  //   baseform[i] = windowMean(smooth_bl, i+moving_window_nsamps, 2*moving_window_nsamps, nsamps);
+  // }
+  // if (debug) std::cout<<"7"<<std::endl;
+  // delete smooth_bl;
+
   //subtract off the baseline
   for(int samp=0; samp<nsamps; samp++){
-    //    if (samp%1000==0) std::cout<<wave[samp]<<" "<<baseform[samp]<<std::endl;
+    //    if (samp%1000==0) if (debug) std::cout<<wave[samp]<<" "<<baseform[samp]<<std::endl;
     baseform[samp] = wave[samp]-baseform[samp];
   }
+  if (debug) std::cout<<"8"<<std::endl;
 
   // Set parameters
   baseline.found_baseline=true;

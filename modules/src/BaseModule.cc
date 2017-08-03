@@ -31,12 +31,14 @@ int BaseModule::HandleEvent(EventPtr event, bool process_now)
     _last_process_return = Process(event);
   else
     _last_process_return = 0;
+
   if(_last_process_return){
     Message(ERROR)<<"Module "<<GetName()<<" returns "
 		  <<_last_process_return
 		  <<" processing event "
 		  <<event->GetRawEvent()->GetID()<<"\n";
   }
+  
   return _last_process_return;    
 }
 

@@ -42,6 +42,7 @@ public:
   double time_since_last; ///< time from the end of the last pulse
   std::vector<double> fparameters; ///< fparameters for given prompt time
   std::vector<double> tparameters; ///< time for integral to reach certain fractions
+  std::vector<double> us_integrals; ///< integral of the pulse with 1us resolution
   std::vector<Peak>  peaks; ///< peaks in this pulse
   double gatti;    ///< gatti parameter for this pulse
   double mean_time; ///< mean time of this pulse for PSD studies
@@ -49,7 +50,8 @@ public:
   bool saturated;  ///< was the peak saturated?
   bool is_clean;   ///< clean = this pulse is not back to back with another, not cut off by the end of the scan, not an s2 trigger 
   bool evaluated;  ///< if this pulse has been evaluated
-  
+  bool has_afterpulse; ///< has an afterpulse
+  bool has_cherenkov; ///< has a cherenkov
   ClassDef(Pulse,11);
 };
 
@@ -72,6 +74,7 @@ inline void Pulse::Clear()
   time_since_last = 0;
   if(fparameters.size()) fparameters.clear();
   if(tparameters.size()) tparameters.clear();
+  if(us_integrals.size()) us_integrals.clear();
   if(peaks.size()) peaks.clear();
   gatti = 0;
   mean_time = -1;
@@ -79,6 +82,8 @@ inline void Pulse::Clear()
   saturated = false;
   is_clean  = false;
   evaluated = false;
+  has_afterpulse = false;
+  has_cherenkov  = false;
 };
 
 inline void Pulse::Print(int channel, int pulse)

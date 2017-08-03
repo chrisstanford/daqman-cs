@@ -127,11 +127,28 @@ PulseFinder::PulseFinder() :
                     "Curvature threshold to start a pile up pulse");
   RegisterParameter("pulse_end_slope", pulse_end_slope = -0.25,
                     "Slope threshold to end a pulse");
-  
+
+  // Afterpulse search
+  RegisterParameter("afterpulse_RMS_factor", afterpulse_RMS_factor = 8,
+                    "RMS factor to tag an afterpulse");
+  RegisterParameter("afterpulse_window_nsamps", afterpulse_window_nsamps = 50,
+                    "Number of samples used to calculate the RMS for afterulses");
+  RegisterParameter("afterpulse_search_start", afterpulse_search_start = 0.3,
+                    "Start time for afterpulse search");
+  RegisterParameter("afterpulse_search_end", afterpulse_search_end = 3.0,
+                    "End time for afterpulse search");
+  RegisterParameter("cherenkov_discriminator_value", cherenkov_discriminator_value = -150,
+                    "Decriminator value for cherenkov search");
+  RegisterParameter("cherenkov_search_start", cherenkov_search_start = 3.0,
+                    "Start time for cherenkov search");
+  RegisterParameter("cherenkov_search_end", cherenkov_search_end = 99999.,
+                    "End time for cherenkov search");
+
 }
   
 PulseFinder::~PulseFinder()
 {
+
 }
 
 int PulseFinder::Initialize()
@@ -144,6 +161,42 @@ int PulseFinder::Finalize()
   return 0;
 }
 
+
+double PulseFinder::windowMean(double* wave, int start_index, int lookback, int nsamps) {
+  int n=0;
+  double v=0.;
+  for (int i=start_index-lookback+1; i<=start_index; i++) {
+    if (i<0 || i>=nsamps) continue;
+    v+=wave[i];
+    n++;
+  }
+  return n==0 ? wave[0] : v/n;
+}
+
+double PulseFinder::windowRMS(double* wave, int start_index, int lookback, int nsamps) {
+  int n=0;
+  double v=0.;
+  for (int i=start_index-lookback+1; i<=start_index; i++) {
+    if (i<0 || i>=nsamps) continue;
+    double mean = windowMean(wave, start_index, lookback, nsamps);
+    v+=(wave[i]-mean)*(wave[i]-mean);
+    n++;
+  }
+  return n==0 ? 0 : sqrt(v/n);
+}
+/*
+void PulseFinder::smoothArray(double& array, int nsamps, int smooth_radius=10) {
+  double smooth_array = new double[nsamps];
+  for (int i=0; i<nsamps; i++) {
+    smooth_array[i] = windowMean(array, i+smooth_radius, smooth_radius, nsamps);
+  }
+  for (int i=0; i<nsamps; i++) {
+    array[i] = smooth_array[i];
+  }
+  delete smooth_array;
+  return;
+}
+*/
 int PulseFinder::Process(EventPtr evt)
 {
     EventDataPtr event = evt->GetEventData();
@@ -199,34 +252,126 @@ int PulseFinder::Process(EventPtr evt)
 	    
 	} // end for loop over pulses
 
+
+	// Search for afterpulses
+	double* wave = chdata.GetBaselineSubtractedWaveform();
+	  //	Baseline& baseline = chdata->baseline;
+	const int nsamps = chdata.nsamps;
+	// for(size_t p=0; p<chdata.pulses.size(); p++){
+	//   std::cout<<"Pulse: "<<chdata.pulses.at(p).start_time<<" "<<chdata.pulses.at(p).end_time<<std::endl;
+	// }
+	/*
+	// New method 2
+	for(size_t p=0; p<chdata.pulses.size(); p++){
+	  Pulse pulse = chdata.pulses.at(p);
+	  int search_start_index = chdata.TimeToSample(pulse.start_time+afterpulse_search_start);
+	  int search_end_index = chdata.TimeToSample(pulse.start_time+afterpulse_search_end);
+	  const int afterpulse_window_nsamps = search_end_index-search_start_index;
+	  // Make a waveform of the afterpulse search region
+	  double ap_wave[afterpulse_window_nsamps];
+	  for (int i=0; i<afterpulse_window_nsamps; i++) {
+	    int wave_index = i+search_start_index;
+	    ap_wave[i] = wave[wave_index];
+	  }
+	  // Downsample
+	  const int ds_factor = 10;
+	  const int ds_nsamps = afterpulse_window_nsamps/ds_factor+1;
+	  double ds_ap_wave[ds_nsamps];
+	  for (int i=0; i<ds_nsamps; i++) {
+	    ds_ap_wave[i] = meanWindow(ap_wave, (i+1)*ds_factor, ds_factor, afterpulse_window_nsamps);
+	  }
+	  
+	}
+
+
+	// New method
+	for(size_t p=0; p<chdata.pulses.size(); p++){
+	  Pulse pulse = chdata.pulses.at(p);
+	  int search_start_index = chdata.TimeToSample(pulse.start_time+afterpulse_search_start);
+	  int search_end_index = chdata.TimeToSample(pulse.start_time+afterpulse_search_end);
+	  const int afterpulse_window_nsamps = search_end_index-search_start_index;
+	  // Make a smoothed out waveform of the afterpulse search region
+	  double smooth_wave[afterpulse_window_nsamps];
+	  for (int i=0; i<afterpulse_window_nsamps; i++) {
+	    int wave_index = i+search_start_index;
+	    smooth_wave[i] = wave[wave_index];
+	  }
+	  // Smooth the array many times
+	  smoothArray(smooth_wave,nsamps);
+	  smoothArray(smooth_wave,nsamps);
+	  smoothArray(smooth_wave,nsamps);
+	  smoothArray(smooth_wave,nsamps);
+	  smoothArray(smooth_wave,nsamps);
+	  for (int i=0; i<afterpulse_window_nsamps; i++) {
+	    int wave_index = i+search_start_index;
+	    
+	  }
+	  // Subract off the pulse from the waveform, now we just get the fluctuations
+	  double pulse_subtracted_wave[afterpulse_window_nsamps];
+	  for (int i=0; i<afterpulse_window_nsamps; i++) {
+            int wave_index = i+search_start_index;
+            pulse_subtracted_wave[i] = wave[wave_index]-smooth_wave[i];
+          }
+	}
+
+	for(size_t p=0; p<chdata.pulses.size(); p++){
+	  Pulse pulse = chdata.pulses.at(p);
+	  int search_start_index = chdata.TimeToSample(pulse.start_time+afterpulse_search_start);
+	  int search_end_index = chdata.TimeToSample(pulse.start_time+afterpulse_search_end);
+	  for (int i=search_start_index; i<search_end_index; i++) {
+	    if (i>nsamps) continue;
+	    double preMean = windowMean(wave,i-10,afterpulse_window_nsamps,nsamps); // RMS of the waveforms in the previous window_nsamps
+	    double preRMS = windowRMS(wave,i-10,afterpulse_window_nsamps,nsamps); // RMS of the waveforms in the previous window_nsamps
+	    if ((preMean-wave[i])>afterpulse_RMS_factor*preRMS) {
+	      pulse.has_afterpulse = true;
+	      std::cout<<"afterpulse at "<<chdata.SampleToTime(i)<<" preMean: "<<preMean<<" preRMS: "<<preRMS<<" thisValue: "<<wave[i]<<std::endl;
+	    }
+	  }
+	}
+	*/
+	// Search for cherenkov
+	for(size_t p=0; p<chdata.pulses.size(); p++){
+	  Pulse& pulse = chdata.pulses.at(p);
+	  int search_start_index = chdata.TimeToSample(pulse.start_time+cherenkov_search_start);
+	  int search_end_index = chdata.TimeToSample(pulse.start_time+cherenkov_search_end);
+	  if (search_end_index>pulse.end_index) search_end_index = pulse.end_index;
+	  for (int i=search_start_index; i<search_end_index && i<nsamps && !pulse.has_cherenkov; i++) {
+	    if (fabs(wave[i])>fabs(cherenkov_discriminator_value)) {
+	      pulse.has_cherenkov = true;
+	      //	      std::cout<<"pulse "<<p<<" cherenkov at "<<chdata.SampleToTime(i)<<" thisValue: "<<wave[i]<<" discrim: "<<cherenkov_discriminator_value<<std::endl;
+	    }
+	  }
+	}
 	//get rid of noise pulses
 	//	double noise_start=0, noise_end=0;
-	for(size_t j=0; j<chdata.pulses.size(); j++){
-	  Pulse &pulse = chdata.pulses.at(j);
+	// for(size_t j=0; j<chdata.pulses.size(); j++){
+	//   Pulse &pulse = chdata.pulses.at(j);
 
-	  if(pulse.integral+pulse.peak_amplitude>=0 ||
-	     //	     pulse.overshoot>5*chdata.baseline.sigma ||
-	     pulse.overshoot>0.5*pulse.peak_amplitude){
-	    pulse.evaluated=false;
-	    /*	    noise_start = pulse.start_time-0.2;
-	    noise_end = pulse.end_time+0.2;
-	    //get rid of the previous noise pulses
-	    for(int k=j-1; k>=0; k--){
-	      if(chdata.pulses.at(k).start_time>=noise_start &&
-		 chdata.pulses.at(k).start_time<=noise_end) chdata.pulses.at(k).evaluated=false;
-	      else break;
-	      }*/
-	  }//end if this is a bad pulse
-	  /*	  if(noise_end>noise_start){//if this pulse comes close after a noise
-	    if(chdata.pulses.at(j).start_time>=noise_start &&
-	       chdata.pulses.at(j).start_time<=noise_end) chdata.pulses.at(j).evaluated=false;
-	    else {noise_start=0; noise_end=0;}//out of noise window
-	    }//end if noise end*/
-	}//end for loop
+	//   if(pulse.integral+pulse.peak_amplitude>=0 ||
+	//      //	     pulse.overshoot>5*chdata.baseline.sigma ||
+	//      pulse.overshoot>0.5*pulse.peak_amplitude){
+	//     pulse.evaluated=false;
+	//     /*	    noise_start = pulse.start_time-0.2;
+	//     noise_end = pulse.end_time+0.2;
+	//     //get rid of the previous noise pulses
+	//     for(int k=j-1; k>=0; k--){
+	//       if(chdata.pulses.at(k).start_time>=noise_start &&
+	// 	 chdata.pulses.at(k).start_time<=noise_end) chdata.pulses.at(k).evaluated=false;
+	//       else break;
+	//       }*/
+	//   }//end if this is a bad pulse
+	//   /*	  if(noise_end>noise_start){//if this pulse comes close after a noise
+	//     if(chdata.pulses.at(j).start_time>=noise_start &&
+	//        chdata.pulses.at(j).start_time<=noise_end) chdata.pulses.at(j).evaluated=false;
+	//     else {noise_start=0; noise_end=0;}//out of noise window
+	//     }//end if noise end*/
+	// }//end for loop
 
 	chdata.npulses = chdata.pulses.size();
     } //end loop over channels
     //End evaluation of pulse variables for each pulse on each channel*************************************************************
+    //      std::cout<<"Ending pulsefinder"<<std::endl;
+
     return 0;
 }
 
@@ -236,7 +381,7 @@ void PulseFinder::VarianceSearch(ChannelData* chdata,
 {
   Baseline& baseline = chdata->baseline;
   int index=start_window;
-  double* wave = chdata->GetWaveform();
+  double* wave =  chdata->GetWaveform();
   double start_baseline;
   bool found_start;
   for(index = start_window; index < chdata->nsamps; index++)
@@ -309,15 +454,21 @@ void PulseFinder::DiscriminatorSearch( ChannelData* chdata,
   int search_start_index = chdata->TimeToSample(search_start_time, true);
   int search_end_index = chdata->TimeToSample(search_end_time, true);
   for(int index = search_start_index+discriminator_start_add; 
-      index<search_end_index-discriminator_end_add; index++){
+      index<search_end_index// -discriminator_end_add
+	; index++){
     if(wave[index]<=check_val){
       if(wave[index-1]>check_val){//if just come to a pulse
         in_pulse = true;
-        start_index.push_back(index-discriminator_start_add );
-	//	std::cout<<"New Pulse starting at "<<index-discriminator_start_add<<"/"<<search_end_index<<" wave[index]: "<<wave[index]<<" check_val: "<<check_val<<std::endl;
+	int this_start_index = index-discriminator_start_add;
+	if(this_start_index<0)
+	  this_start_index = 0;
+	start_index.push_back(this_start_index);
+	   //	std::cout<<"New Pulse starting at "<<chdata->SampleToTime(index)<<" wave[index]: "<<wave[index]<<" check_val: "<<check_val<<std::endl;
       }
       if(wave[index+1]>check_val){//if just leave a pulse
-        if(in_pulse) end_index.push_back(index+discriminator_end_add );
+	int this_end_index = index+discriminator_end_add;
+	if (this_end_index > chdata->nsamps-1) this_end_index = chdata->nsamps-1;
+        if(in_pulse) end_index.push_back(this_end_index);
         in_pulse = false;
 	//	std::cout<<"Pulse ending at "<<index+discriminator_end_add<<"/"<<search_end_index<<" wave[index]: "<<wave[index]<<" check_val: "<<check_val<<std::endl;
       }//end if wave index+1
@@ -332,7 +483,6 @@ void PulseFinder::DiscriminatorSearch( ChannelData* chdata,
   // end_index.clear();
   //    return;
   //  }
-
   // Resoving overlapping pulses
   if (start_index.size()<=1) return;
   if (discriminator_combine_overlapping_pulses) {
@@ -353,6 +503,18 @@ void PulseFinder::DiscriminatorSearch( ChannelData* chdata,
     // for(size_t index=0; index<start_index.size(); index++){
     //   std::cout<<"Pulse "<<index<<": "<<start_index.at(index)<<"-"<<end_index.at(index)<<std::endl;
     // }
+    // Drop afterpulses
+    for(size_t index=1; index<start_index.size(); ){
+      double prev_start_t = chdata->SampleToTime(start_index.at(index-1));
+      double start_t = chdata->SampleToTime(start_index.at(index));
+      //      std::cout<<prev_start_t<<" "<<start_t<<" "<<afterpulse_search_start<<" "<<afterpulse_search_end<<std::endl;
+      if (start_t > prev_start_t+afterpulse_search_start && start_t < prev_start_t+afterpulse_search_end) { 
+	start_index.erase(start_index.begin() + index);
+	end_index.erase(end_index.begin() + index);
+      } else index++;
+    }
+    
+
     // Simple method: If pulses are overlapping, set end of early pulse to beginning of later pulse
     for(size_t index=1; index<start_index.size(); index++){
       if(start_index.at(index)<end_index.at(index-1)){
@@ -360,12 +522,14 @@ void PulseFinder::DiscriminatorSearch( ChannelData* chdata,
       }
     }
     // Remove pulses that end before they start
-    for(size_t index=0; index<start_index.size(); index++){
+    for(size_t index=0; index<start_index.size(); ){
       if(end_index.at(index)<start_index.at(index)) {
 	start_index.erase(start_index.begin() + index);
 	end_index.erase(end_index.begin() + index);
-      }
+      } else index++;
     }
+    
+    
     // for(size_t index=0; index<start_index.size(); index++){
     //   std::cout<<"New Pulse "<<index<<": "<<start_index.at(index)<<"-"<<end_index.at(index)<<std::endl;
     // }
@@ -387,6 +551,7 @@ void PulseFinder::DiscriminatorSearch( ChannelData* chdata,
     //   }//end if statement
     // }//end for index loop
   }
+
   // for(size_t index=0; index<start_index.size(); index++)
   //   std::cout<<chdata->channel_id<<'\t'<<index<<'\t'<<chdata->SampleToTime(start_index.at(index))
   //    	     <<'\t'<<chdata->SampleToTime(end_index.at(index))<<std::endl;

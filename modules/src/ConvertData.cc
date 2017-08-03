@@ -14,6 +14,10 @@ ConvertData::ConvertData():
 {
   RegisterParameter("offset_channels", _offsets, 
 		    "map of channelid:offset time to apply for analysis");
+  RegisterParameter("waveform_start_time", waveform_start_time = -9e9,
+		    "truncate waveform to start_time");
+  RegisterParameter("waveform_end_time", waveform_end_time = 9e9,
+		    "truncate waveform to end_time");
   _v172X_params = 0;
   _headers_only = false;
 }
@@ -323,6 +327,13 @@ int ConvertData::DecodeV172XData(const unsigned char* rawdata,
 		     wave[chdata.unsuppressed_regions.back().second-1] );
 	}
       }// end check for zero suppressed data
+      std::vector<double>& wave = chdata.waveform;
+      int start_index = (int)(waveform_start_time*chdata.sample_rate + chdata.trigger_index); //chdata.TimeToSample didn't work here
+      int end_index = (int)(waveform_end_time*chdata.sample_rate + chdata.trigger_index);
+      if (!(start_index<0 || start_index>=end_index || end_index>=(int)chdata.waveform.size())) {
+	wave.erase(wave.begin()+end_index, wave.end());
+	wave.erase(wave.begin(), wave.begin()+start_index);
+      }
       chdata.nsamps = chdata.waveform.size();
     }
   }

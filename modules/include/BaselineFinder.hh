@@ -44,8 +44,11 @@ public:
   int max_flat_nsamps;        /// maximum sample number to stay "flat" inside a pulse
   double min_good_fraction;   /// Minimum fraction of valid samples in a moving window
 
+  double baseline_start_nsamps;  /// Number of samples to base the initial baseline RMS off of
   double start_RMS_factor;    /// If a sample is start_RMS_factor*baseline_RMS away from the baseline_mean, then start the pulse
-  double end_RMS_factor;      /// If a moving_window_nsamps consecutive samples are within maseline_mean +/- end_RMS_factor*baseline_RMS, then end the pulse
+  double end_RMS_factor;      /// If a end_nsamps_within_RMS consecutive samples are within maseline_mean +/- end_RMS_factor*baseline_RMS, then end the pulse
+  double end_nsamps_within_RMS;// If a end_nsamps_within_RMS consecutive samples are within maseline_mean +/- end_RMS_factor*baseline_RMS, then end the pulse
+  double min_nsamps_between_pulses;      /// Minimum number of samples between two pulses to consider them as separate
 
 private:
   int FlatBaseline(ChannelData* chdata);

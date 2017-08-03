@@ -182,7 +182,6 @@ int PSD::Process(ChannelData *chdata){
     if(tof.evaluated) ProcessPulse(chdata, tof);
   }
   
-
   return 0;
 }
 
@@ -195,10 +194,11 @@ void PSD::ProcessPulse(ChannelData *chdata, Pulse & pulse){
   //calculate the fparameters 
   for(size_t count=0; count<fparameter_times.size(); count++){
     int fp_index = chdata->TimeToSample(pulse.half_max_time+fparameter_times.at(count), true);
-    if(fp_index>pulse.end_index) fp_index = pulse.end_index;
+    //    if(fp_index>pulse.end_index) fp_index = pulse.end_index;
+    if(fp_index>chdata->nsamps) fp_index = chdata->nsamps;
     double fp = chdata->integral[fp_index] - chdata->integral[pulse.start_index];
     // std::cout<<"fp calculation: "<<fparameter_times.at(count)<<'\t'<<chdata->SampleToTime(fp_index)
-    // 	     <<'\t'<<fp<<'\t'<<pulse.integral<<std::endl;
+    // <<'\t'<<fp<<'\t'<<pulse.integral<<std::endl;
     if(pulse.integral!=0) pulse.fparameters.push_back(fp/pulse.integral);
     else pulse.fparameters.push_back(-1);
   }
@@ -228,6 +228,13 @@ void PSD::ProcessPulse(ChannelData *chdata, Pulse & pulse){
     }//end if
   }//end for
   while(tp_count<pulse.tparameters.size())pulse.tparameters.at(tp_count++) = pulse.end_time;
+
+  //calculate the us integrals
+  int duration_us = (pulse.end_time-pulse.start_time);
+  for (int i=0; i<duration_us; i++) {
+    int us_index = chdata->TimeToSample(pulse.start_time + i, true); 
+    pulse.us_integrals.push_back(chdata->integral[us_index] - chdata->integral[pulse.start_index]);
+  }
 
   const double* wave = chdata->GetBaselineSubtractedWaveform();
 
@@ -303,6 +310,7 @@ void PSD::ProcessPulse(ChannelData *chdata, Pulse & pulse){
   pulse.gatti = sum;
 
   rebined_pulse->Reset();  
+
   return;
   
 }

@@ -56,6 +56,7 @@ int SpeFinder::Process(ChannelData* chdata)
 
   int min_baseline_nsamps = min_baseline_length*chdata->sample_rate;
   if(min_baseline_nsamps<1) min_baseline_nsamps = 1;
+  //if(min_baseline_nsamps<0) min_baseline_nsamps = 0;
 
   //use the subtracted waveform to search for spe start and end
   double* subtracted = chdata->GetBaselineSubtractedWaveform();
@@ -90,13 +91,27 @@ int SpeFinder::Process(ChannelData* chdata)
     return 0;
   }
 
+  // Combine nearby pulses
+  // Combine pulses that are not separated by more than min_baseline_nsamps
+  for (size_t i=1; i<start_index.size(); ) {
+    if (start_index.at(i)-end_index.at(i-1) < min_baseline_nsamps) {
+      end_index.at(i-1) = end_index.at(i);      // Set previous pulse end to current pulse end
+      start_index.erase(start_index.begin()+i); // Delete current pulse
+      end_index.erase(end_index.begin()+i);
+    } else {
+      i++;
+    }
+  }
+
+
+
   //evaluate all the pulses, use raw waveform
   double* wave = chdata->GetWaveform();
   int pre_pulse_end = -1, post_pulse_start = -1, peak_index=-1;
   double bl_mean = 0, bl_sigma = 0, spe_integral=0, peak_amplitude=-1;
   for(size_t i=0; i<start_index.size(); i++){
-    // std::cout<<"Possible SPE pulse at: "<<chdata->SampleToTime(start_index.at(i))
-    // 	     <<'\t'<<chdata->SampleToTime(end_index.at(i))<<std::endl;
+    //    std::cout<<"Possible SPE pulse at: "<<chdata->SampleToTime(start_index.at(i))
+    //     	     <<'\t'<<chdata->SampleToTime(end_index.at(i))<<std::endl;
     if(i>0) pre_pulse_end = end_index.at(i-1);
     else pre_pulse_end = first_baseline_samp;
     if(i<start_index.size()-1) post_pulse_start = start_index.at(i+1);
@@ -104,7 +119,8 @@ int SpeFinder::Process(ChannelData* chdata)
     //check the good baseline length
     if(start_index.at(i)-pre_pulse_end<min_baseline_nsamps 
        || post_pulse_start-end_index.at(i)<min_baseline_nsamps){
-      // std::cout<<"\tThe baseline is too short, give up"<<std::endl;
+      //      std::cout<<"\tThe baseline is too short, give up"<<std::endl;
+      //      std::cout<<start_index.at(i)<<" "<<pre_pulse_end<<" "<<post_pulse_start<<" "<<end_index.at(i)<<" "<<min_baseline_nsamps<<std::endl;
       continue;
     }
     //calculate the local baseline mean and sigma
@@ -140,9 +156,14 @@ int SpeFinder::Process(ChannelData* chdata)
     Spe a_spe;
     a_spe.integral = spe_integral;
     a_spe.start_time = chdata->SampleToTime(start_index.at(i));
+    a_spe.peak_time = chdata->SampleToTime(peak_index);
+    a_spe.end_time = chdata->SampleToTime(end_index.at(i));
     a_spe.width = end_index.at(i)-start_index.at(i)+1;
     a_spe.amplitude = peak_amplitude;
-    a_spe.peak_time = chdata->SampleToTime(peak_index);
+    a_spe.amplitude_sigma = peak_amplitude/chdata->baseline.sigma;
+    a_spe.start_index = start_index.at(i);
+    a_spe.peak_index = peak_index;
+    a_spe.end_index = end_index.at(i);
     a_spe.baseline_mean = bl_mean;
     a_spe.baseline_sigma = bl_sigma;
     chdata->single_pe.push_back(a_spe);
